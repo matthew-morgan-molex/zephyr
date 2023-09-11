@@ -666,7 +666,8 @@ static int imxrt_init(void)
 	MU_SetFlags(MU_BASE, BOOT_FLAG);
 #endif
 
-#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7) || #ifndef CONFIG_IMXRT1XXX_CODE_CACHE
+#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7) || defined(CONFIG_SOC_MIMXRT1165_CM7)
+#ifndef CONFIG_IMXRT1XXX_CODE_CACHE
 	/* SystemInit enables code cache, disable it here */
 	SCB_DisableICache();
 #else
