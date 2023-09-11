@@ -137,7 +137,7 @@ manifest:
         - fs
     - name: hal_nxp
       remote: bittware
-      revision: 4ba45e0e2657ec314116125ebd750c8f6dc219bb
+      revision: fbc076259b02ec2a5f4391c767923eba718fc538
       path: modules/hal/nxp
       groups:
         - hal
@@ -165,7 +165,7 @@ manifest:
         - crypto
     - name: mcuboot
       remote: bittware
-      revision: 064a62b06989ca31d1be1d7bd927fcdcd1db4468
+      revision: ebe23ca4e289f94fda8131d43c2fc01783776e0e
       path: bootloader/mcuboot
     - name: mipi-sys-t
       path: modules/debug/mipi-sys-t
