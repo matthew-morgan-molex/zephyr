@@ -18,6 +18,10 @@ properties:
     type: int
     description: Bus idle timeout in nanoseconds
 
+  pin-low-timeout:
+    type: int
+    description: Pin low with no transition timeout in nanoseconds
+
   scl-gpios:
     type: phandle-array
     description: |
