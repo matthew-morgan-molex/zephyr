@@ -196,7 +196,7 @@ static int mcux_lpi2c_transfer(const struct device *dev, struct i2c_msg *msgs,
       //		k_sem_take(&data->device_sync_sem, K_FOREVER);
 		if (k_sem_take(&data->device_sync_sem, K_MSEC(250)) != 0)
       {
-          LOG_INF("Timed out waiting for transfer to complete! (%s:0x%x)", dev->name, addr);
+          /* LOG_INF("Timed out waiting for transfer to complete! (%s:0x%x)", dev->name, addr); */
           ret = -EIO;
           break;
       }
@@ -219,10 +219,10 @@ static int mcux_lpi2c_transfer(const struct device *dev, struct i2c_msg *msgs,
                          addr);
                  break;
                  
-             case kStatus_LPI2C_Nak:
-                 LOG_INF("  The slave device sent a NAK in response to a byte. (%s:0x%x)",
-                         dev->name, addr);
-                 break;
+             /* case kStatus_LPI2C_Nak: */
+             /*     LOG_INF("  The slave device sent a NAK in response to a byte. (%s:0x%x)", */
+             /*             dev->name, addr); */
+             /*     break; */
 
              case kStatus_LPI2C_FifoError:
                  LOG_INF("  FIFO under run or overrun. (%s:0x%x)", dev->name,
