@@ -39,6 +39,7 @@ struct mcux_lpi2c_config {
 	void (*irq_config_func)(const struct device *dev);
 	uint32_t bitrate;
 	uint32_t bus_idle_timeout_ns;
+        uint32_t pin_low_timeout_ns;
 	const struct pinctrl_dev_config *pincfg;
 #ifdef CONFIG_I2C_MCUX_LPI2C_BUS_RECOVERY
 	struct gpio_dt_spec scl;
@@ -119,6 +120,7 @@ static void mcux_lpi2c_master_transfer_callback(LPI2C_Type *base,
 	ARG_UNUSED(base);
 
 	data->callback_status = status;
+   
 	k_sem_give(&data->device_sync_sem);
 }
 
@@ -191,16 +193,76 @@ static int mcux_lpi2c_transfer(const struct device *dev, struct i2c_msg *msgs,
 		}
 
 		/* Wait for the transfer to complete */
-		k_sem_take(&data->device_sync_sem, K_FOREVER);
-
+      		/* BittWare change: timeout after 250ms */
+		if (k_sem_take(&data->device_sync_sem, K_MSEC(250)) != 0)
+                {
+                    ret = -EIO;
+                    break;
+                }
+       
 		/* Return an error if the transfer didn't complete
 		 * successfully. e.g., nak, timeout, lost arbitration
 		 */
 		if (data->callback_status != kStatus_Success) {
 			LPI2C_MasterTransferAbort(base, &data->handle);
+#if CONFIG_I2C_MCUX_LPI2C_STATUS_LOG
+                        switch (data->callback_status)
+                        {
+                        case kStatus_LPI2C_Busy:
+                            LOG_INF("  The master is already performing a transfer. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_Idle:
+                            LOG_INF("  The slave driver is idle. (%s:0x%x)", dev->name,
+                                    addr);
+                            break;
+
+                        /* case kStatus_LPI2C_Nak: */
+                        /*     LOG_INF("  The slave device sent a NAK in response to a byte. (%s:0x%x)", */
+                        /*             dev->name, addr); */
+                        /*     break; */
+
+                        case kStatus_LPI2C_FifoError:
+                            LOG_INF("  FIFO under run or overrun. (%s:0x%x)", dev->name,
+                                    addr);
+                            break;
+
+                        case kStatus_LPI2C_BitError:
+                            LOG_INF("  Transferred bit was not seen on the bus. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_ArbitrationLost:
+                            LOG_INF("  Arbitration lost error. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_PinLowTimeout:
+                            LOG_INF("  SCL or SDA were held low longer than the timeout. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_NoTransferInProgress:
+                            LOG_INF("  Attempt to abort a transfer when one is not in progress. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_DmaRequestFail:
+                            LOG_INF("  DMA request failed. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+
+                        case kStatus_LPI2C_Timeout:
+                            LOG_INF("  Timeout polling status flags. (%s:0x%x)",
+                                    dev->name, addr);
+                            break;
+                        }
+#endif
 			ret = -EIO;
 			break;
 		}
+
 		if (msgs->len == 0) {
 			k_busy_wait(SCAN_DELAY_US(config->bitrate));
 			if (0 != (base->MSR & LPI2C_MSR_NDF_MASK)) {
@@ -501,6 +563,7 @@ static int mcux_lpi2c_init(const struct device *dev)
 
 	LPI2C_MasterGetDefaultConfig(&master_config);
 	master_config.busIdleTimeout_ns = config->bus_idle_timeout_ns;
+        master_config.pinLowTimeout_ns = config->pin_low_timeout_ns;
 	LPI2C_MasterInit(base, &master_config, clock_freq);
 	LPI2C_MasterTransferCreateHandle(base, &data->handle,
 					 mcux_lpi2c_master_transfer_callback,
@@ -561,6 +624,9 @@ static const struct i2c_driver_api mcux_lpi2c_driver_api = {
 		.bus_idle_timeout_ns =					\
 			UTIL_AND(DT_INST_NODE_HAS_PROP(n, bus_idle_timeout),\
 				 DT_INST_PROP(n, bus_idle_timeout)),	\
+		.pin_low_timeout_ns =					\
+			UTIL_AND(DT_INST_NODE_HAS_PROP(n, pin_low_timeout),\
+				 DT_INST_PROP(n, pin_low_timeout)),	\
 	};								\
 									\
 	static struct mcux_lpi2c_data mcux_lpi2c_data_##n;		\

@@ -70,7 +70,9 @@ static int mcux_igpio_configure(const struct device *dev,
 	/* Set appropriate bits in pin configuration register */
 	volatile uint32_t *gpio_cfg_reg =
 		(volatile uint32_t *)config->pin_muxes[cfg_idx].config_register;
-	uint32_t reg = *gpio_cfg_reg;
+        uint32_t reg = 0;
+        if (gpio_cfg_reg)
+            reg = *gpio_cfg_reg;
 
 #ifdef CONFIG_SOC_SERIES_IMX_RT10XX
 	if ((flags & GPIO_SINGLE_ENDED) != 0) {

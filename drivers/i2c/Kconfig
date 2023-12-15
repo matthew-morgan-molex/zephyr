@@ -124,7 +124,7 @@ config I2C_MCUX_FLEXCOMM
 	help
 	  Enable the mcux flexcomm i2c driver.
 
-config I2C_MCUX_LPI2C
+menuconfig I2C_MCUX_LPI2C
 	bool "MCUX LPI2C driver"
 	default y
 	depends on DT_HAS_NXP_IMX_LPI2C_ENABLED
@@ -132,6 +132,14 @@ config I2C_MCUX_LPI2C
 	select PINCTRL
 	help
 	  Enable the mcux LPI2C driver.
+
+if I2C_MCUX_LPI2C
+config I2C_MCUX_LPI2C_STATUS_LOG
+	bool "MCUX LPI2C driver status logging"
+	default y
+	help
+	  Enable the mcux LPI2C driver status logging.
+endif
 
 config I2C_MCUX_LPI2C_BUS_RECOVERY
 	bool "Bus recovery support"
