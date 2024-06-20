@@ -49,7 +49,7 @@ struct mcux_lpi2c_config {
 
 struct mcux_lpi2c_data {
 	lpi2c_master_handle_t handle;
-	struct k_sem lock;
+	struct k_mutex lock;
 	struct k_sem device_sync_sem;
 	status_t callback_status;
 #ifdef CONFIG_I2C_TARGET
@@ -99,13 +99,13 @@ static int mcux_lpi2c_configure(const struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = k_sem_take(&data->lock, K_FOREVER);
+	ret = k_mutex_lock(&data->lock, K_FOREVER);
 	if (ret) {
 		return ret;
 	}
 
 	LPI2C_MasterSetBaudRate(base, clock_freq, baudrate);
-	k_sem_give(&data->lock);
+	k_mutex_unlock(&data->lock);
 
 	return 0;
 }
@@ -149,7 +149,7 @@ static int mcux_lpi2c_transfer(const struct device *dev, struct i2c_msg *msgs,
 	status_t status;
 	int ret = 0;
 
-	ret = k_sem_take(&data->lock, K_FOREVER);
+	ret = k_mutex_lock(&data->lock, K_FOREVER);
 	if (ret) {
 		return ret;
 	}
@@ -275,7 +275,7 @@ static int mcux_lpi2c_transfer(const struct device *dev, struct i2c_msg *msgs,
 		msgs++;
 	}
 
-	k_sem_give(&data->lock);
+	k_mutex_unlock(&data->lock);
 
 	return ret;
 }
@@ -325,7 +325,7 @@ static int mcux_lpi2c_recover_bus(const struct device *dev)
 		return -EIO;
 	}
 
-	k_sem_take(&data->lock, K_FOREVER);
+	k_mutex_lock(&data->lock, K_FOREVER);
 
 	error = gpio_pin_configure_dt(&config->scl, GPIO_OUTPUT_HIGH);
 	if (error != 0) {
@@ -357,7 +357,7 @@ static int mcux_lpi2c_recover_bus(const struct device *dev)
 restore:
 	(void)pinctrl_apply_state(config->pincfg, PINCTRL_STATE_DEFAULT);
 
-	k_sem_give(&data->lock);
+	k_mutex_unlock(&data->lock);
 
 	return error;
 }
@@ -548,7 +548,7 @@ static int mcux_lpi2c_init(const struct device *dev)
 	lpi2c_master_config_t master_config;
 	int error;
 
-	k_sem_init(&data->lock, 1, 1);
+	k_mutex_init(&data->lock);
 	k_sem_init(&data->device_sync_sem, 0, K_SEM_MAX_LIMIT);
 
 	if (!device_is_ready(config->clock_dev)) {
