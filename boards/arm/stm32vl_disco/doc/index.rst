@@ -119,7 +119,7 @@ Default Zephyr Peripheral Mapping:
 - I2C2_SCL : PB10
 - I2C2_SDA : PB11
 
-For mode details please refer to `STM32VLDISCOVERY board User Manual`_.
+For more details please refer to `STM32VLDISCOVERY board User Manual`_.
 
 Programming and Debugging
 *************************
@@ -137,7 +137,7 @@ This interface is supported by the openocd version included in the Zephyr SDK.
 Flashing an application
 -----------------------
 
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -150,7 +150,7 @@ Debugging
 =========
 
 You can debug an application in the usual way.  Here is an example for the
-:ref:`blinky-sample` application.
+:zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky

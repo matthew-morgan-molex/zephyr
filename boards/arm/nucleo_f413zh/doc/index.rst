@@ -117,7 +117,7 @@ Available pins:
    :align: center
    :alt: Nucleo F413ZH Morpho connectors (right)
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -162,13 +162,13 @@ This interface is supported by the openocd version included in Zephyr SDK.
 
 
 .. _Nucleo F413ZH website:
-   http://www.st.com/en/evaluation-tools/nucleo-f413zh.html
+   https://www.st.com/en/evaluation-tools/nucleo-f413zh.html
 
 .. _STM32 Nucleo-144 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00244518.pdf
+   https://www.st.com/resource/en/user_manual/dm00244518.pdf
 
 .. _STM32F413ZH on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32f413zh.html
+   https://www.st.com/en/microcontrollers/stm32f413zh.html
 
 .. _STM32F413/423 reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00305666.pdf
+   https://www.st.com/resource/en/reference_manual/dm00305666.pdf

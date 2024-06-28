@@ -12,10 +12,8 @@
  * hardware for the RT5XX platforms.
  */
 
-#include <zephyr/arch/arm/aarch32/nmi.h>
 #include <zephyr/init.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/irq.h>
 #include <zephyr/linker/sections.h>
 #include <soc.h>
 #include "fsl_power.h"
@@ -218,7 +216,8 @@ void z_arm_platform_init(void)
 	SystemInit();
 }
 
-static void clock_init(void)
+/* Weak so that board can override with their own clock init routine. */
+void __weak rt5xx_clock_init(void)
 {
 	/* Configure LPOSC 1M */
 	/* Power on LPOSC (1MHz) */
@@ -282,8 +281,12 @@ static void clock_init(void)
 	/* Switch SYSTICK_CLK to MAIN_CLK_DIV */
 	CLOCK_AttachClk(kMAIN_CLK_DIV_to_SYSTICK_CLK);
 #if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(flexcomm0), nxp_lpc_usart, okay)
-	/* Switch FLEXCOMM0 to FRG */
-	CLOCK_AttachClk(kFRG_to_FLEXCOMM0);
+	#ifdef CONFIG_FLEXCOMM0_CLK_SRC_FRG
+		/* Switch FLEXCOMM0 to FRG */
+		CLOCK_AttachClk(kFRG_to_FLEXCOMM0);
+	#elif defined(CONFIG_FLEXCOMM0_CLK_SRC_FRO)
+		CLOCK_AttachClk(kFRO_DIV4_to_FLEXCOMM0);
+	#endif
 #endif
 #if CONFIG_USB_DC_NXP_LPCIP3511
 	usb_device_clock_init();
@@ -366,6 +369,16 @@ static void clock_init(void)
 	RESET_PeripheralReset(kSDIO0_RST_SHIFT_RSTn);
 #endif
 
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(smartdma), okay) && CONFIG_DMA_MCUX_SMARTDMA
+	/* Power up SMARTDMA ram */
+	POWER_DisablePD(kPDRUNCFG_APD_SMARTDMA_SRAM);
+	POWER_DisablePD(kPDRUNCFG_PPD_SMARTDMA_SRAM);
+	POWER_ApplyPD();
+
+	RESET_ClearPeripheralReset(kSMART_DMA_RST_SHIFT_RSTn);
+	CLOCK_EnableClock(kCLOCK_Smartdma);
+#endif
+
 	DT_FOREACH_STATUS_OKAY(nxp_lpc_ctimer, CTIMER_CLOCK_SETUP)
 
 	/* Set up dividers. */
@@ -410,6 +423,23 @@ static void clock_init(void)
 	CLOCK_SetClkDiv(kCLOCK_DivAdcClk, 1);
 #endif
 
+#if CONFIG_COUNTER_NXP_MRT
+	RESET_PeripheralReset(kMRT0_RST_SHIFT_RSTn);
+#endif
+
+#if DT_NODE_HAS_COMPAT_STATUS(DT_NODELABEL(dmic0), nxp_dmic, okay)
+	/* Using the Audio PLL as input clock leads to better clock dividers
+	 * for typical PCM sample rates ({8,16,24,32,48,96} kHz.
+	 */
+	/* DMIC source from audio pll, divider 8, 24.576M/8=3.072MHZ
+	 * Select Audio PLL as clock source. This should produce a bit clock
+	 * of 3.072MHZ
+	 */
+	CLOCK_AttachClk(kAUDIO_PLL_to_DMIC);
+	CLOCK_SetClkDiv(kCLOCK_DivDmicClk, 8);
+
+#endif
+
 	/* Set SystemCoreClock variable. */
 	SystemCoreClock = CLOCK_INIT_CORE_CLOCK;
 
@@ -418,7 +448,8 @@ static void clock_init(void)
 }
 
 #if CONFIG_MIPI_DSI
-void imxrt_pre_init_display_interface(void)
+/* Weak so board can override this function */
+void __weak imxrt_pre_init_display_interface(void)
 {
 	/* Assert MIPI DPHY reset. */
 	RESET_SetPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
@@ -444,21 +475,41 @@ void imxrt_pre_init_display_interface(void)
 	 * We set the divider of the PFD3 output of the SYSPLL, which has a
 	 * fixed multiplied of 18, and use this output frequency for the DPHY.
 	 */
+
+#ifdef CONFIG_MIPI_DPHY_CLK_SRC_AUX1_PLL
+	/* Note: AUX1 PLL clock is system pll clock * 18 / pfd.
+	 * system pll clock is configured at 528MHz by default.
+	 */
 	CLOCK_AttachClk(kAUX1_PLL_to_MIPI_DPHY_CLK);
 	CLOCK_InitSysPfd(kCLOCK_Pfd3,
 		((CLOCK_GetSysPllFreq() * 18ull) /
 		((unsigned long long)(DT_PROP(DT_NODELABEL(mipi_dsi), phy_clock)))));
 	CLOCK_SetClkDiv(kCLOCK_DivDphyClk, 1);
-
+#elif defined(CONFIG_MIPI_DPHY_CLK_SRC_FRO)
+	CLOCK_AttachClk(kFRO_DIV1_to_MIPI_DPHY_CLK);
+	CLOCK_SetClkDiv(kCLOCK_DivDphyClk,
+		(CLK_FRO_CLK / DT_PROP(DT_NODELABEL(mipi_dsi), phy_clock)));
+#endif
 	/* Clear DSI control reset (Note that DPHY reset is cleared later)*/
 	RESET_ClearPeripheralReset(kMIPI_DSI_CTRL_RST_SHIFT_RSTn);
 }
 
-void imxrt_post_init_display_interface(void)
+void __weak imxrt_post_init_display_interface(void)
 {
 	/* Deassert MIPI DPHY reset. */
 	RESET_ClearPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
 }
+
+void __weak imxrt_deinit_display_interface(void)
+{
+	/* Assert MIPI DPHY and DSI reset */
+	RESET_SetPeripheralReset(kMIPI_DSI_PHY_RST_SHIFT_RSTn);
+	RESET_SetPeripheralReset(kMIPI_DSI_CTRL_RST_SHIFT_RSTn);
+	/* Remove clock from DPHY */
+	CLOCK_AttachClk(kNONE_to_MIPI_DPHY_CLK);
+}
+
+
 #endif
 
 /**
@@ -472,28 +523,20 @@ void imxrt_post_init_display_interface(void)
  */
 static int nxp_rt500_init(void)
 {
-
-	/* old interrupt lock level */
-	unsigned int oldLevel;
-
-	/* disable interrupts */
-	oldLevel = irq_lock();
-
 	/* Initialize clocks with tool generated code */
-	clock_init();
-
-	/*
-	 * install default handler that simply resets the CPU if configured in
-	 * the kernel, NOP otherwise
-	 */
-	NMI_INIT();
+	rt5xx_clock_init();
 
 #ifndef CONFIG_IMXRT5XX_CODE_CACHE
 	CACHE64_DisableCache(CACHE64_CTRL0);
 #endif
 
-	/* restore interrupt state */
-	irq_unlock(oldLevel);
+	/* Some ROM versions may have errata leaving these pins in a non-reset state,
+	 * which can often cause power leakage on most expected board designs,
+	 * restore the reset state here and leave the pin configuration up to board/user DT
+	 */
+	IOPCTL->PIO[1][15] = 0;
+	IOPCTL->PIO[3][28] = 0;
+	IOPCTL->PIO[3][29] = 0;
 
 	return 0;
 }

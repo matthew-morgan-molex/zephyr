@@ -5,7 +5,7 @@
  */
 /dts-v1/;
 
-#include <espressif/esp32.dtsi>
+#include <espressif/esp32/esp32_wrover_e_n4r8.dtsi>
 #include "esp_wrover_kit-pinctrl.dtsi"
 
 / {
@@ -32,6 +32,7 @@
 		zephyr,console = &uart0;
 		zephyr,shell-uart = &uart0;
 		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
 		zephyr,display = &ili9341;
 	};
 
@@ -69,6 +70,26 @@
 			pwms = <&ledc0 2 PWM_HZ(100) PWM_POLARITY_NORMAL>;
 		};
 	};
+
+	mipi_dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		dc-gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
+		spi-dev = <&spi3>;
+		write-only;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ili9341: ili9341@0 {
+			compatible = "ilitek,ili9341";
+			mipi-max-frequency = <25000000>;
+			reg = <0>;
+			pixel-format = <0>;
+			rotation = <0>;
+			width = <240>;
+			height = <320>;
+		};
+	};
 };
 
 &cpu0 {
@@ -88,6 +109,13 @@
 
 &gpio0 {
 	status = "okay";
+
+	/* FIXME: should be part of the display node */
+	lcd-backlight {
+		gpio-hog;
+		gpios = <5 GPIO_ACTIVE_HIGH>;
+		output-low;
+	};
 };
 
 &gpio1 {
@@ -117,18 +145,6 @@
 	status = "okay";
 	pinctrl-0 = <&spim3_default>;
 	pinctrl-names = "default";
-
-	ili9341: ili9341@0 {
-		compatible = "ilitek,ili9341";
-		spi-max-frequency = <25000000>;
-		reg = <0>;
-		cmd-data-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
-		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
-		pixel-format = <0>;
-		rotation = <0>;
-		width = <240>;
-		height = <320>;
-	};
 };
 
 &ledc0 {

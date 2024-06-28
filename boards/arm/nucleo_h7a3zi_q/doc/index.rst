@@ -69,7 +69,7 @@ Nucleo H7A3ZI-Q provides the following hardware components:
 - USART(5)
 - UART(5)
 - USB OTG Full Speed and High Speed(1)
-- CAN-FD(2)
+- CAN FD(2)
 - SAI(2)
 - SPDIF_Rx(4)
 - HDMI_CEC(1)
@@ -117,7 +117,7 @@ Other hardware features are not yet supported on this Zephyr port.
 The default configuration can be found in the defconfig file:
 ``boards/arm/nucleo_h7a3zi_q/nucleo_h7a3zi_q_defconfig``
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------

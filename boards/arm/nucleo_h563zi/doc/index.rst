@@ -173,6 +173,8 @@ The Zephyr nucleo_h563zi board configuration supports the following hardware fea
 +-----------+------------+-------------------------------------+
 | WATCHDOG  | on-chip    | independent watchdog                |
 +-----------+------------+-------------------------------------+
+| USB       | on-chip    | USB full-speed host/device bus      |
++-----------+------------+-------------------------------------+
 
 
 Other hardware features are not yet supported on this Zephyr port.
@@ -204,7 +206,7 @@ Connections and IOs
 Nucleo H563ZI Board has 9 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `STM32H5 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32H5 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -292,7 +294,7 @@ Debugging
 =========
 
 You can debug an application in the usual way.  Here is an example for the
-:ref:`blinky-sample` application.
+:zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -306,7 +308,7 @@ You can debug an application in the usual way.  Here is an example for the
    https://www.st.com/resource/en/user_manual/um3115-stm32h5-nucleo144-board-mb1404-stmicroelectronics.pdf
 
 .. _STM32H563ZI on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32h563zi.html
+   https://www.st.com/en/microcontrollers/stm32h563zi.html
 
 .. _STM32H563 reference manual:
    https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf

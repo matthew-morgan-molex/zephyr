@@ -5,6 +5,7 @@
  */
 
 #include "arduino_r3_connector.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	leds {
@@ -24,6 +25,7 @@
 		compatible = "gpio-keys";
 		user_button: button_0 {
 			gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+			zephyr,code = <INPUT_KEY_0>;
 		};
 	};
 };
@@ -35,4 +37,8 @@
 	d2ppre1 = <2>;
 	d2ppre2 = <2>;
 	d3ppre = <2>;
+};
+
+&mailbox {
+	status = "okay";
 };

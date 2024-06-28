@@ -127,6 +127,8 @@ The Zephyr nucleo_g474re board configuration supports the following hardware fea
 +-----------+------------+-------------------------------------+
 | die-temp  | on-chip    | die temperature sensor              |
 +-----------+------------+-------------------------------------+
+| FDCAN1    | on-chip    | CAN controller                      |
++-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on this Zephyr port.
 
@@ -140,7 +142,7 @@ Connections and IOs
 Nucleo G474RE Board has 6 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `STM32G4 Nucleo-64 board User Manual`_.
+For more details please refer to `STM32G4 Nucleo-64 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -171,6 +173,8 @@ Default Zephyr Peripheral Mapping:
 - LD2 : PA5
 - ADC1_IN1 : PA0
 - DAC1_OUT1 : PA4
+- FDCAN1_RX: PA11
+- FDCAN1_TX: PA12
 
 System Clock
 ------------
@@ -239,13 +243,13 @@ You can debug an application in the usual way.  Here is an example for the
    :goals: debug
 
 .. _Nucleo G474RE website:
-   http://www.st.com/en/evaluation-tools/nucleo-g474re.html
+   https://www.st.com/en/evaluation-tools/nucleo-g474re.html
 
 .. _STM32G4 Nucleo-64 board User Manual:
    https://www.st.com/resource/en/user_manual/dm00556337.pdf
 
 .. _STM32G474RE on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32g474re.html
+   https://www.st.com/en/microcontrollers/stm32g474re.html
 
 .. _STM32G4 reference manual:
    https://www.st.com/resource/en/reference_manual/dm00355726.pdf

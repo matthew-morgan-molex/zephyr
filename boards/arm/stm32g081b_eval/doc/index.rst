@@ -147,7 +147,7 @@ Default Zephyr Peripheral Mapping:
 - LED3        : PD8
 - LED4        : PD9
 
-For mode details please refer to `STM32G0 Evaluation board User Manual`_.
+For more details please refer to `STM32G0 Evaluation board User Manual`_.
 
 Programming and Debugging
 *************************
@@ -168,7 +168,7 @@ The STM32G081B Evaluation board includes an ST-LINK/V2-1 embedded debug tool int
 Flashing an application to the STM32G081B_EVAL
 ----------------------------------------------
 
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -204,4 +204,4 @@ References
    https://www.st.com/resource/en/user_manual/um2403-evaluation-board-with-stm32g081rb-mcu-stmicroelectronics.pdf
 
 .. _G081RB on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32g081rb.html
+   https://www.st.com/en/microcontrollers/stm32g081rb.html

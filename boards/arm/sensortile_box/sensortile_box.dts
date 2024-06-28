@@ -7,6 +7,7 @@
 /dts-v1/;
 #include <st/l4/stm32l4r9Xi.dtsi>
 #include <st/l4/stm32l4r9z(g-i)tx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "STMicroelectronics SensorTile.box board";
@@ -37,6 +38,7 @@
 		user_button: button {
 			label = "User PB1";
 			gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
 		};
 	};
 
@@ -156,6 +158,23 @@
 		spi-max-frequency = <1000000>;
 		reg = <2>;
 		irq-gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>, <&gpioe 6 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&spi2 {
+	pinctrl-0 = <&spi2_sck_pd1 &spi2_miso_pd3 &spi2_mosi_pc3>;
+	pinctrl-names = "default";
+	status = "okay";
+	cs-gpios = <&gpiod 0 GPIO_ACTIVE_LOW>;
+	spbtle_1s_sensortile_box: spbtle-1s@0 {
+		compatible = "st,hci-spi-v2";
+		reg = <0>;
+		reset-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&gpiod 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+		spi-max-frequency = <DT_FREQ_M(1)>;
+		spi-cpha;
+		spi-hold-cs;
+		reset-assert-duration-ms = <6>;
 	};
 };
 

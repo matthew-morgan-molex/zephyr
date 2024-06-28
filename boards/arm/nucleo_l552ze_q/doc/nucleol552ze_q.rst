@@ -234,7 +234,7 @@ Available pins:
    :align: center
    :alt: Nucleo L552ZE Q Zio right connector
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -261,7 +261,7 @@ Default Zephyr Peripheral Mapping:
 - SPI_3_MOSI : PC12
 - PWM_2_CH1 : PA0
 - USER_PB : PC13
-- LD2 : PA5
+- LD2 : PB7
 - DAC1 : PA4
 - ADC1 : PC0
 
@@ -338,7 +338,7 @@ can be generated using ``nucleo_l552ze_q_ns`` as build target.
 
    $ west build -b nucleo_l552ze_q_ns path/to/source/directory
 
-Note: When building the ``*_ns`` image with TF-M, ``build/tfm/postbuild.sh`` bash script
+Note: When building the ``*_ns`` image with TF-M, ``build/tfm/api_ns/postbuild.sh`` bash script
 is run automatically in a post-build step to make some required flash layout changes.
 
 Once the build is completed, run the following script to initialize the option bytes.
@@ -370,16 +370,16 @@ You can debug an application in the usual way.  Here is an example for the
    :goals: debug
 
 .. _Nucleo L552ZE Q website:
-   http://www.st.com/en/evaluation-tools/nucleo-l552ze-q.html
+   https://www.st.com/en/evaluation-tools/nucleo-l552ze-q.html
 
 .. _STM32 Nucleo-144 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00615305.pdf
+   https://www.st.com/resource/en/user_manual/dm00615305.pdf
 
 .. _STM32L552ZE on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32l552ze.html
+   https://www.st.com/en/microcontrollers/stm32l552ze.html
 
 .. _STM32L552 reference manual:
-   http://www.st.com/resource/en/reference_manual/DM00346336.pdf
+   https://www.st.com/resource/en/reference_manual/DM00346336.pdf
 
 .. _STM32CubeProgrammer:
    https://www.st.com/en/development-tools/stm32cubeprog.html

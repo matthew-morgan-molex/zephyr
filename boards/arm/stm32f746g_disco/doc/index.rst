@@ -130,7 +130,7 @@ Pin Mapping
 STM32F746G Discovery kit has 9 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `32F746G-DISCO board User Manual`_.
+For more details please refer to `32F746G-DISCO board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -231,13 +231,13 @@ You can debug an application in the usual way.  Here is an example for the
 
 
 .. _32F746G-DISCO website:
-   http://www.st.com/en/evaluation-tools/32f746gdiscovery.html
+   https://www.st.com/en/evaluation-tools/32f746gdiscovery.html
 
 .. _32F746G-DISCO board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00190424.pdf
+   https://www.st.com/resource/en/user_manual/dm00190424.pdf
 
 .. _STM32F746NGH6 on www.st.com:
-   http://www.st.com/content/st_com/en/products/microcontrollers/stm32-32-bit-arm-cortex-mcus/stm32-high-performance-mcus/stm32f7-series/stm32f7x6/stm32f746ng.html
+   https://www.st.com/content/st_com/en/products/microcontrollers/stm32-32-bit-arm-cortex-mcus/stm32-high-performance-mcus/stm32f7-series/stm32f7x6/stm32f746ng.html
 
 .. _STM32F74xxx reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00124865.pdf
+   https://www.st.com/resource/en/reference_manual/dm00124865.pdf

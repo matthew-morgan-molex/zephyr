@@ -67,13 +67,13 @@ if(CONFIG_USERSPACE)
   # Build-time assignment of permissions to kernel objects to
   # threads declared with K_THREAD_DEFINE()
   zephyr_linker_section(
-    NAME z_object_assignment_area
+    NAME k_object_assignment_area
     VMA FLASH NOINPUT
     SUBALIGN 4
   )
   zephyr_linker_section_configure(
-    SECTION z_object_assignment
-    INPUT ".z_object_assignment.static.*"
+    SECTION k_object_assignment
+    INPUT ".k_object_assignment.static.*"
     KEEP SORT NAME
   )
 endif()
@@ -136,6 +136,10 @@ if(CONFIG_SETTINGS)
   zephyr_iterable_section(NAME settings_handler_static KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
 endif()
 
+if(CONFIG_SENSING)
+  zephyr_iterable_section(NAME sensing_sensor_info KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+endif()
+
 if(CONFIG_SENSOR_INFO)
   zephyr_iterable_section(NAME sensor_info KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
 endif()
@@ -181,9 +185,11 @@ zephyr_iterable_section(NAME tracing_backend KVMA RAM_REGION GROUP RODATA_REGION
 zephyr_linker_section(NAME zephyr_dbg_info KVMA RAM_REGION GROUP RODATA_REGION NOINPUT ${XIP_ALIGN_WITH_INPUT})
 zephyr_linker_section_configure(SECTION zephyr_dbg_info INPUT ".zephyr_dbg_info" KEEP)
 
-zephyr_linker_section(NAME device_handles KVMA RAM_REGION GROUP RODATA_REGION NOINPUT ${XIP_ALIGN_WITH_INPUT} ENDALIGN 16)
-zephyr_linker_section_configure(SECTION device_handles INPUT .__device_handles_pass1* KEEP SORT NAME PASS LINKER_DEVICE_HANDLES_PASS1)
-zephyr_linker_section_configure(SECTION device_handles INPUT .__device_handles_pass2* KEEP SORT NAME PASS NOT LINKER_DEVICE_HANDLES_PASS1)
+if (CONFIG_DEVICE_DEPS)
+  zephyr_linker_section(NAME device_deps KVMA RAM_REGION GROUP RODATA_REGION NOINPUT ${XIP_ALIGN_WITH_INPUT} ENDALIGN 16)
+  zephyr_linker_section_configure(SECTION device_deps INPUT .__device_deps_pass1* KEEP SORT NAME PASS LINKER_DEVICE_DEPS_PASS1)
+  zephyr_linker_section_configure(SECTION device_deps INPUT .__device_deps_pass2* KEEP SORT NAME PASS NOT LINKER_DEVICE_DEPS_PASS1)
+endif()
 
 zephyr_iterable_section(NAME _static_thread_data KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
 
@@ -206,4 +212,18 @@ endif()
 
 if(CONFIG_USBD_MSC_CLASS)
   zephyr_iterable_section(NAME usbd_msc_lun KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+endif()
+
+if(CONFIG_ZBUS)
+  zephyr_iterable_section(NAME zbus_channel KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+  zephyr_iterable_section(NAME zbus_observer KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+  zephyr_iterable_section(NAME zbus_channel_observation KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+endif()
+
+if(CONFIG_GNSS)
+  zephyr_iterable_section(NAME gnss_data_callback KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
+endif()
+
+if(CONFIG_GNSS_SATELLITES)
+  zephyr_iterable_section(NAME gnss_satellites_callback KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4)
 endif()

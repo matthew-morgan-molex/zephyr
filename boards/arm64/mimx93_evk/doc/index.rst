@@ -86,18 +86,18 @@ Use U-Boot to load and kick zephyr.bin to Cortex-A55 Core1:
 
 .. code-block:: console
 
-    fatload mmc 1:1 0xc0000000 zephyr.bin; dcache flush; icache flush; dcache off; icache off; cpu 1 release 0xc0000000
+    fatload mmc 1:1 0xd0000000 zephyr.bin; dcache flush; icache flush; dcache off; icache off; cpu 1 release 0xd0000000
 
 
 Or use the following command to kick zephyr.bin to Cortex-A55 Core0:
 
 .. code-block:: console
 
-    fatload mmc 1:1 0xc0000000 zephyr.bin; dcache flush; icache flush; dcache off; icache off; go 0xc0000000
+    fatload mmc 1:1 0xd0000000 zephyr.bin; dcache flush; icache flush; dcache off; icache off; go 0xd0000000
 
 
 Use this configuration to run basic Zephyr applications and kernel tests,
-for example, with the :ref:`synchronization_sample`:
+for example, with the :zephyr:code-sample:`synchronization` sample:
 
 .. zephyr-app-commands::
    :zephyr-app: samples/synchronization
@@ -168,7 +168,7 @@ Firstly, we need to explain a few Jailhouse concepts that will be referred to la
   cell can utilize.
 
 * **Root cell**: refers to the cell in which Linux is running. This is the main cell which
-  will contain all the hardware resources that Linux will utilize and will be used used to assign
+  will contain all the hardware resources that Linux will utilize and will be used to assign
   resources to the inmates. The inmates CANNOT use resources such as the CPU that haven't been
   assigned to the root cell.
 

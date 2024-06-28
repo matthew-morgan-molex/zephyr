@@ -14,6 +14,7 @@ zephyr_library_sources(
     lwm2m_obj_device.c
     lwm2m_rw_link_format.c
     lwm2m_rw_plain_text.c
+    lwm2m_rw_opaque.c
     lwm2m_util.c
     lwm2m_rd_client.c
     )
@@ -125,5 +126,7 @@ zephyr_library_sources_ifdef(CONFIG_LWM2M_UCIFI_BATTERY
 zephyr_library_sources_ifdef(CONFIG_LWM2M_SHELL
     lwm2m_shell.c
 )
+
+zephyr_linker_sources(SECTIONS iterables.ld)
 
 zephyr_library_link_libraries_ifdef(CONFIG_MBEDTLS mbedTLS)

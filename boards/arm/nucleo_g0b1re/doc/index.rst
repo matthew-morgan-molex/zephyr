@@ -56,7 +56,7 @@ Nucleo G0B1RE provides the following hardware components:
 - HDMI_CEC(1)
 - USB 2.0 FS device (crystal-less) and host controller(1)
 - USB Type-C Power Delivery controller
-- CAN-FD(2)
+- CAN FD(2)
 - GPIO (up to 94) with external interrupt capability
 - Tamper Pins(3)
 - 12-bit ADC with 16 channels
@@ -108,6 +108,8 @@ The Zephyr nucleo_g0b1re board configuration supports the following hardware fea
 +-----------+------------+-------------------------------------+
 | die-temp  | on-chip    | die temperature sensor              |
 +-----------+------------+-------------------------------------+
+| FDCAN     | on-chip    | CAN controller                      |
++-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported in this Zephyr port.
 
@@ -137,8 +139,10 @@ Default Zephyr Peripheral Mapping:
 - ADC1 IN0  : PA0
 - ADC1 IN1  : PA1
 - DAC1_OUT1 : PA4
+- FDCAN1 RX/TX: PA11/PA12
+- FDCAN2 RX/TX: PB0/PB1
 
-For mode details please refer to `STM32 Nucleo-64 board User Manual`_.
+For more details please refer to `STM32 Nucleo-64 board User Manual`_.
 
 Programming and Debugging
 *************************
@@ -168,7 +172,7 @@ following pyocd command:
 Flashing an application to Nucleo G0B1RE
 ----------------------------------------
 
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -195,13 +199,13 @@ References
 .. target-notes::
 
 .. _Nucleo G0B1RE website:
-   http://www.st.com/en/evaluation-tools/nucleo-g0b1re.html
+   https://www.st.com/en/evaluation-tools/nucleo-g0b1re.html
 
 .. _STM32G0B1 reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00371828.pdf
+   https://www.st.com/resource/en/reference_manual/dm00371828.pdf
 
 .. _STM32 Nucleo-64 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00452640.pdf
+   https://www.st.com/resource/en/user_manual/dm00452640.pdf
 
 .. _G0B1RE on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32g0b1re.html
+   https://www.st.com/en/microcontrollers/stm32g0b1re.html

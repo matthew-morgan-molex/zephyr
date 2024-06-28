@@ -160,7 +160,7 @@ Available pins:
      :align: center
      :alt: Nucleo L4R5ZI Arduino connectors
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -219,9 +219,23 @@ Ethernet over USB is configured as the default network interface (EEM)
 Programming and Debugging
 *************************
 
+The NUCLEO-L4R5ZI board includes a ST-LINK/V2 embedded debug tool interface.
+
+The board is configured to be flashed using west `STM32CubeProgrammer`_ runner,
+so its installation is required to be able to flash the board.
+
+Alternatively, openocd (provided in Zephyr SDK) or JLink can also be used to
+flash the board using the ``--runner`` (or ``-r``) option:
+
+.. code-block:: console
+
+   $ west flash --runner openocd
+   $ west flash --runner jlink
+
 Connect the Nucleo L4R5ZI to your host computer using the USB port.
-Then build and flash an application. Here is an example for the
-:ref:`hello_world` application.
+Then build and flash an application.
+
+Here is an example for the :ref:`hello_world` application.
 
 Run a serial host program to connect with your Nucleo board:
 
@@ -243,16 +257,19 @@ You should see the following message on the console:
    Hello World! arm
 
 .. _Nucleo L4R5ZI website:
-   http://www.st.com/en/evaluation-tools/nucleo-l4r5zi.html
+   https://www.st.com/en/evaluation-tools/nucleo-l4r5zi.html
 
 .. _STM32 Nucleo-144 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00368330.pdf
+   https://www.st.com/resource/en/user_manual/dm00368330.pdf
 
 .. _STM32L4R5ZI on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32l4r5zi.html
+   https://www.st.com/en/microcontrollers/stm32l4r5zi.html
 
 .. _STM32L4R5 reference manual:
-   http://www.st.com/resource/en/reference_manual/DM00310109.pdf
+   https://www.st.com/resource/en/reference_manual/DM00310109.pdf
 
 .. _STM32 ST-LINK utility:
-   http://www.st.com/content/st_com/en/products/development-tools/software-development-tools/stm32-software-development-tools/stm32-programmers/stsw-link004.html
+   https://www.st.com/content/st_com/en/products/development-tools/software-development-tools/stm32-software-development-tools/stm32-programmers/stsw-link004.html
+
+.. _STM32CubeProgrammer:
+   https://www.st.com/en/development-tools/stm32cubeprog.html

@@ -5,6 +5,7 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/pm/pm.h>
+#include <zephyr/pm/device_runtime.h>
 #include <zephyr/device.h>
 #include <zephyr/debug/sparse.h>
 #include <zephyr/cache.h>
@@ -16,6 +17,8 @@
 #include <adsp_memory.h>
 #include <adsp_imr_layout.h>
 #include <zephyr/drivers/mm/mm_drv_intel_adsp_mtl_tlb.h>
+#include <zephyr/drivers/timer/system_timer.h>
+#include <mem_window.h>
 
 #define LPSRAM_MAGIC_VALUE      0x13579BDF
 #define LPSCTL_BATTR_MASK       GENMASK(16, 12)
@@ -24,8 +27,13 @@
 
 __imr void power_init(void)
 {
+#if CONFIG_ADSP_IDLE_CLOCK_GATING
 	/* Disable idle power gating */
+	DSPCS.bootctl[0].bctl |= DSPBR_BCTL_WAITIPPG;
+#else
+	/* Disable idle power and clock gating */
 	DSPCS.bootctl[0].bctl |= DSPBR_BCTL_WAITIPCG | DSPBR_BCTL_WAITIPPG;
+#endif /* CONFIG_ADSP_IDLE_CLOCK_GATING */
 }
 
 #ifdef CONFIG_PM
@@ -41,6 +49,8 @@ __imr void power_init(void)
 #define L3_INTERRUPT_MASK       (1<<L3_INTERRUPT_NUMBER)
 
 #define ALL_USED_INT_LEVELS_MASK (L2_INTERRUPT_MASK | L3_INTERRUPT_MASK)
+
+#define CPU_POWERUP_TIMEOUT_USEC 10000
 
 /**
  * @brief Power down procedure.
@@ -73,6 +83,14 @@ uint8_t *global_imr_ram_storage;
  * @biref a d3 restore boot entry point
  */
 extern void boot_entry_d3_restore(void);
+
+/*
+ * @brief re-enables IDC interrupt for all cores after exiting D3 state
+ *
+ * Called once from core 0
+ */
+extern void soc_mp_on_d3_exit(void);
+
 #else
 
 /*
@@ -93,6 +111,7 @@ struct core_state {
 	uint32_t excsave3;
 	uint32_t thread_ptr;
 	uint32_t intenable;
+	uint32_t ps;
 	uint32_t bctl;
 };
 
@@ -109,6 +128,7 @@ struct lpsram_header {
 
 static ALWAYS_INLINE void _save_core_context(uint32_t core_id)
 {
+	core_desc[core_id].ps = XTENSA_RSR("PS");
 	core_desc[core_id].vecbase = XTENSA_RSR("VECBASE");
 	core_desc[core_id].excsave2 = XTENSA_RSR("EXCSAVE2");
 	core_desc[core_id].excsave3 = XTENSA_RSR("EXCSAVE3");
@@ -122,6 +142,7 @@ static ALWAYS_INLINE void _restore_core_context(void)
 {
 	uint32_t core_id = arch_proc_id();
 
+	XTENSA_WSR("PS", core_desc[core_id].ps);
 	XTENSA_WSR("VECBASE", core_desc[core_id].vecbase);
 	XTENSA_WSR("EXCSAVE2", core_desc[core_id].excsave2);
 	XTENSA_WSR("EXCSAVE3", core_desc[core_id].excsave3);
@@ -132,6 +153,7 @@ static ALWAYS_INLINE void _restore_core_context(void)
 }
 
 void dsp_restore_vector(void);
+void mp_resume_entry(void);
 
 void power_gate_entry(uint32_t core_id)
 {
@@ -162,6 +184,11 @@ void power_gate_exit(void)
 	cpu_early_init();
 	sys_cache_data_flush_and_invd_all();
 	_restore_core_context();
+
+	/* Secondary core is resumed by set_dx */
+	if (arch_proc_id()) {
+		mp_resume_entry();
+	}
 }
 
 __asm__(".align 4\n\t"
@@ -183,7 +210,7 @@ __asm__(".align 4\n\t"
 	"  call0 power_gate_exit\n\t");
 
 #ifdef CONFIG_ADSP_IMR_CONTEXT_SAVE
-static void ALWAYS_INLINE power_off_exit(void)
+static ALWAYS_INLINE void power_off_exit(void)
 {
 	__asm__(
 		"  movi  a0, 0\n\t"
@@ -200,7 +227,7 @@ __imr void pm_state_imr_restore(void)
 {
 	struct imr_layout *imr_layout = (struct imr_layout *)(IMR_LAYOUT_ADDRESS);
 	/* restore lpsram power and contents */
-	bmemcpy(z_soc_uncached_ptr((__sparse_force void __sparse_cache *)
+	bmemcpy(sys_cache_uncached_ptr_get((__sparse_force void __sparse_cache *)
 				   UINT_TO_POINTER(LP_SRAM_BASE)),
 		imr_layout->imr_state.header.imr_ram_storage,
 		LP_SRAM_SIZE);
@@ -213,16 +240,20 @@ __imr void pm_state_imr_restore(void)
 }
 #endif /* CONFIG_ADSP_IMR_CONTEXT_SAVE */
 
-__weak void pm_state_set(enum pm_state state, uint8_t substate_id)
+void pm_state_set(enum pm_state state, uint8_t substate_id)
 {
 	ARG_UNUSED(substate_id);
 	uint32_t cpu = arch_proc_id();
+	int ret;
+
+	ARG_UNUSED(ret);
 
 	/* save interrupt state and turn off all interrupts */
 	core_desc[cpu].intenable = XTENSA_RSR("INTENABLE");
 	z_xt_ints_off(0xffffffff);
 
-	if (state == PM_STATE_SOFT_OFF) {
+	switch (state) {
+	case PM_STATE_SOFT_OFF:
 		core_desc[cpu].bctl = DSPCS.bootctl[cpu].bctl;
 		DSPCS.bootctl[cpu].bctl &= ~DSPBR_BCTL_WAITIPCG;
 		if (cpu == 0) {
@@ -272,41 +303,58 @@ __weak void pm_state_set(enum pm_state state, uint8_t substate_id)
 					(void *)rom_entry;
 			sys_cache_data_flush_range(imr_layout, sizeof(*imr_layout));
 #endif /* CONFIG_ADSP_IMR_CONTEXT_SAVE */
+			uint32_t hpsram_mask = 0;
+#ifdef CONFIG_ADSP_POWER_DOWN_HPSRAM
 			/* turn off all HPSRAM banks - get a full bitmap */
 			uint32_t ebb_banks = ace_hpsram_get_bank_count();
-			uint32_t hpsram_mask = (1 << ebb_banks) - 1;
+			hpsram_mask = (1 << ebb_banks) - 1;
+#endif /* CONFIG_ADSP_POWER_DOWN_HPSRAM */
 			/* do power down - this function won't return */
+			ret = pm_device_runtime_put(INTEL_ADSP_HST_DOMAIN_DEV);
+			__ASSERT_NO_MSG(ret == 0);
 			power_down(true, uncache_to_cache(&hpsram_mask),
 				   true);
 		} else {
 			power_gate_entry(cpu);
 		}
-	} else if (state == PM_STATE_RUNTIME_IDLE) {
+		break;
+	case PM_STATE_RUNTIME_IDLE:
 		DSPCS.bootctl[cpu].bctl &= ~DSPBR_BCTL_WAITIPPG;
 		DSPCS.bootctl[cpu].bctl &= ~DSPBR_BCTL_WAITIPCG;
-		ACE_PWRCTL->wpdsphpxpg &= ~BIT(cpu);
+		soc_cpu_power_down(cpu);
 		if (cpu == 0) {
 			uint32_t battr = DSPCS.bootctl[cpu].battr & (~LPSCTL_BATTR_MASK);
 
 			battr |= (DSPBR_BATTR_LPSCTL_RESTORE_BOOT & LPSCTL_BATTR_MASK);
 			DSPCS.bootctl[cpu].battr = battr;
 		}
+
+		ret = pm_device_runtime_put(INTEL_ADSP_HST_DOMAIN_DEV);
+		__ASSERT_NO_MSG(ret == 0);
 		power_gate_entry(cpu);
-	} else {
+		break;
+	default:
 		__ASSERT(false, "invalid argument - unsupported power state");
 	}
 }
 
 /* Handle SOC specific activity after Low Power Mode Exit */
-__weak void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
+void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 {
 	ARG_UNUSED(substate_id);
 	uint32_t cpu = arch_proc_id();
 
+	if (cpu == 0) {
+		int ret = pm_device_runtime_get(INTEL_ADSP_HST_DOMAIN_DEV);
+
+		ARG_UNUSED(ret);
+		__ASSERT_NO_MSG(ret == 0);
+	}
+
 	if (state == PM_STATE_SOFT_OFF) {
 		/* restore clock gating state */
 		DSPCS.bootctl[cpu].bctl |=
-			(core_desc[0].bctl & DSPBR_BCTL_WAITIPCG);
+			(core_desc[cpu].bctl & DSPBR_BCTL_WAITIPCG);
 
 #ifdef CONFIG_ADSP_IMR_CONTEXT_SAVE
 		if (cpu == 0) {
@@ -317,6 +365,9 @@ __weak void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 			imr_layout->imr_state.header.adsp_imr_magic = 0;
 			imr_layout->imr_state.header.imr_restore_vector = NULL;
 			imr_layout->imr_state.header.imr_ram_storage = NULL;
+			sys_clock_idle_exit();
+			mem_window_idle_exit();
+			soc_mp_on_d3_exit();
 		}
 #endif /* CONFIG_ADSP_IMR_CONTEXT_SAVE */
 		soc_cpus_active[cpu] = true;
@@ -333,14 +384,18 @@ __weak void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 			return;
 		}
 
-		ACE_PWRCTL->wpdsphpxpg |= BIT(cpu);
+		soc_cpu_power_up(cpu);
 
-		while ((ACE_PWRSTS->dsphpxpgs & BIT(cpu)) == 0) {
-			k_busy_wait(HW_STATE_CHECK_DELAY);
+		if (!WAIT_FOR(soc_cpu_is_powered(cpu),
+			      CPU_POWERUP_TIMEOUT_USEC, k_busy_wait(HW_STATE_CHECK_DELAY))) {
+			k_panic();
 		}
 
-		DSPCS.bootctl[cpu].bctl |=
-			DSPBR_BCTL_WAITIPCG | DSPBR_BCTL_WAITIPPG;
+#if CONFIG_ADSP_IDLE_CLOCK_GATING
+		DSPCS.bootctl[cpu].bctl |= DSPBR_BCTL_WAITIPPG;
+#else
+		DSPCS.bootctl[cpu].bctl |= DSPBR_BCTL_WAITIPCG | DSPBR_BCTL_WAITIPPG;
+#endif /* CONFIG_ADSP_IDLE_CLOCK_GATING */
 		if (cpu == 0) {
 			DSPCS.bootctl[cpu].battr &= (~LPSCTL_BATTR_MASK);
 		}
@@ -352,6 +407,11 @@ __weak void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 	}
 
 	z_xt_ints_on(core_desc[cpu].intenable);
+
+	/* We don't have the key used to lock interruptions here.
+	 * Just set PS.INTLEVEL to 0.
+	 */
+	__asm__ volatile ("rsil a2, 0");
 }
 
-#endif
+#endif /* CONFIG_PM */

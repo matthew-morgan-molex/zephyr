@@ -130,7 +130,7 @@ Default Zephyr Peripheral Mapping:
 - DAC : PA4
 - PWM_3_CH1 : PA6
 
-For mode details please refer to `STM32 Nucleo-64 board User Manual`_.
+For more details please refer to `STM32 Nucleo-64 board User Manual`_.
 
 Programming and Debugging
 *************************
@@ -148,7 +148,7 @@ This interface is supported by the openocd version included in the Zephyr SDK.
 Flashing an application to Nucleo L152RE
 ----------------------------------------
 
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky

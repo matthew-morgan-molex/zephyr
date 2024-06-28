@@ -14,7 +14,7 @@
 LOG_MODULE_REGISTER(net_dns_resolve, CONFIG_DNS_RESOLVER_LOG_LEVEL);
 
 #include <zephyr/types.h>
-#include <zephyr/random/rand32.h>
+#include <zephyr/random/random.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -906,10 +906,12 @@ static int dns_write(struct dns_resolve_context *ctx,
 			   dns_qname->len + 2);
 
 	if (IS_ENABLED(CONFIG_NET_IPV6) &&
-	    net_context_get_family(net_ctx) == AF_INET6) {
+	    net_context_get_family(net_ctx) == AF_INET6 &&
+	    hop_limit > 0) {
 		net_context_set_ipv6_hop_limit(net_ctx, hop_limit);
 	} else if (IS_ENABLED(CONFIG_NET_IPV4) &&
-		   net_context_get_family(net_ctx) == AF_INET) {
+		   net_context_get_family(net_ctx) == AF_INET &&
+		   hop_limit > 0) {
 		net_context_set_ipv4_ttl(net_ctx, hop_limit);
 	}
 
@@ -1075,7 +1077,7 @@ static void query_timeout(struct k_work *work)
 	 */
 	ret = k_mutex_lock(&pending_query->ctx->lock, K_NO_WAIT);
 	if (ret != 0) {
-		struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+		struct k_work_delayable *dwork2 = k_work_delayable_from_work(work);
 
 		/*
 		 * Reschedule query timeout handler with some delay, so that all
@@ -1085,7 +1087,7 @@ static void query_timeout(struct k_work *work)
 		 * Timeout value was arbitrarily chosen and can be updated in
 		 * future if needed.
 		 */
-		k_work_reschedule(dwork, K_MSEC(10));
+		k_work_reschedule(dwork2, K_MSEC(10));
 		return;
 	}
 
@@ -1484,12 +1486,12 @@ struct dns_resolve_context *dns_resolve_get_default(void)
 	return &dns_default_ctx;
 }
 
-void dns_init_resolver(void)
+int dns_resolve_init_default(struct dns_resolve_context *ctx)
 {
+	int ret = 0;
 #if defined(CONFIG_DNS_SERVER_IP_ADDRESSES)
 	static const char *dns_servers[SERVER_COUNT + 1];
 	int count = DNS_SERVER_COUNT;
-	int ret;
 
 	if (count > 5) {
 		count = 5;
@@ -1556,7 +1558,7 @@ void dns_init_resolver(void)
 
 	dns_servers[SERVER_COUNT] = NULL;
 
-	ret = dns_resolve_init(dns_resolve_get_default(), dns_servers, NULL);
+	ret = dns_resolve_init(ctx, dns_servers, NULL);
 	if (ret < 0) {
 		NET_WARN("Cannot initialize DNS resolver (%d)", ret);
 	}
@@ -1566,4 +1568,12 @@ void dns_init_resolver(void)
 	 */
 	(void)dns_resolve_init(dns_resolve_get_default(), NULL, NULL);
 #endif
+	return ret;
 }
+
+#ifdef CONFIG_DNS_RESOLVER_AUTO_INIT
+void dns_init_resolver(void)
+{
+	dns_resolve_init_default(dns_resolve_get_default());
+}
+#endif /* CONFIG_DNS_RESOLVER_AUTO_INIT */

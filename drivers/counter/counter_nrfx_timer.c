@@ -253,6 +253,7 @@ static int set_top_value(const struct device *dev,
 
 	nrf_timer_int_disable(timer, COUNTER_TOP_INT_MASK);
 	nrf_timer_cc_set(timer, TOP_CH, cfg->ticks);
+	nrf_timer_event_clear(timer, COUNTER_TOP_EVT);
 	nrf_timer_shorts_enable(timer, COUNTER_OVERFLOW_SHORT);
 
 	data->top_cb = cfg->callback;
@@ -363,8 +364,10 @@ static void alarm_irq_handle(const struct device *dev, uint32_t id)
 	}
 }
 
-static void irq_handler(const struct device *dev)
+static void irq_handler(const void *arg)
 {
+	const struct device *dev = arg;
+
 	top_irq_handle(dev);
 
 	for (uint32_t i = 0; i < counter_get_num_of_channels(dev); i++) {
@@ -436,7 +439,7 @@ static const struct counter_driver_api counter_nrfx_driver_api = {
 			.channels = CC_TO_ID(DT_INST_PROP(idx, cc_num)),			\
 		},										\
 		.ch_data = counter##idx##_ch_data,						\
-		.timer = (NRF_TIMER_Type *)DT_INST_REG_ADDR(idx),				\
+		.timer = (NRF_TIMER_Type *)_CONCAT(NRF_TIMER, idx),				\
 		LOG_INSTANCE_PTR_INIT(log, LOG_MODULE_NAME, idx)				\
 	};											\
 	DEVICE_DT_INST_DEFINE(idx,								\

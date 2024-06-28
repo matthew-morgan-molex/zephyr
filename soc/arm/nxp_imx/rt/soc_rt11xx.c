@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NXP
+ * Copyright 2021-2023 NXP
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,12 +10,11 @@
 #include <soc.h>
 #include <zephyr/linker/sections.h>
 #include <zephyr/linker/linker-defs.h>
+#include <zephyr/cache.h>
 #include <fsl_clock.h>
 #include <fsl_gpc.h>
 #include <fsl_pmu.h>
 #include <fsl_dcdc.h>
-#include <zephyr/arch/cpu.h>
-#include <zephyr/arch/arm/aarch32/cortex_m/cmsis.h>
 #ifdef CONFIG_NXP_IMX_RT_BOOT_HEADER
 #include <fsl_flexspi_nor_boot.h>
 #endif
@@ -35,15 +34,18 @@
 #include "usb_phy.h"
 #include "usb.h"
 #endif
+#include "memc_nxp_flexram.h"
+
+#include <cmsis_core.h>
 
 #define DUAL_CORE_MU_ENABLED \
-	(CONFIG_SECOND_CORE_MCUX && CONFIG_IPM && CONFIG_IPM_IMX_REV2)
+	(CONFIG_SECOND_CORE_MCUX && CONFIG_IPM && CONFIG_IPM_IMX)
 
 #if DUAL_CORE_MU_ENABLED
 /* Dual core mode is enabled, and messaging unit is present */
 #include <fsl_mu.h>
 #define BOOT_FLAG 0x1U
-#define MU_BASE (MU_Type *)DT_REG_ADDR(DT_INST(0, nxp_imx_mu_rev2))
+#define MU_BASE (MU_Type *)DT_REG_ADDR(DT_INST(0, nxp_imx_mu))
 #endif
 
 #if CONFIG_USB_DC_NXP_EHCI /* USB PHY configuration */
@@ -126,8 +128,13 @@ static const clock_video_pll_config_t videoPllConfig = {
 
 #ifdef CONFIG_NXP_IMX_RT_BOOT_HEADER
 const __imx_boot_data_section BOOT_DATA_T boot_data = {
+#ifdef CONFIG_XIP
 	.start = CONFIG_FLASH_BASE_ADDRESS,
-	.size = KB(CONFIG_FLASH_SIZE),
+	.size = (uint32_t)&_flash_used,
+#else
+	.start = CONFIG_SRAM_BASE_ADDRESS,
+	.size = (uint32_t)&_image_ram_size,
+#endif
 	.plugin = PLUGIN_FLAG,
 	.placeholder = 0xFFFFFFFF,
 };
@@ -277,7 +284,7 @@ static ALWAYS_INLINE void clock_init(void)
 	CLOCK_InitPfd(kCLOCK_PllSys2, kCLOCK_Pfd2, 24);
 
 	/* Init System Pll2 pfd3. */
-#ifdef CONFIG_ETH_MCUX
+#if CONFIG_ETH_MCUX || CONFIG_ETH_NXP_ENET
 	CLOCK_InitPfd(kCLOCK_PllSys2, kCLOCK_Pfd3, 24);
 #else
 	CLOCK_InitPfd(kCLOCK_PllSys2, kCLOCK_Pfd3, 32);
@@ -324,7 +331,7 @@ static ALWAYS_INLINE void clock_init(void)
 #endif
 
 	/* Configure BUS using SYS_PLL3_CLK */
-#ifdef CONFIG_ETH_MCUX
+#if CONFIG_ETH_MCUX || CONFIG_ETH_NXP_ENET
 	/* Configure root bus clock at 198M */
 	rootCfg.mux = kCLOCK_BUS_ClockRoot_MuxSysPll2Pfd3;
 	rootCfg.div = 2;
@@ -396,15 +403,21 @@ static ALWAYS_INLINE void clock_init(void)
 #endif
 
 
-#ifdef CONFIG_ETH_MCUX
+#if CONFIG_ETH_MCUX || CONFIG_ETH_NXP_ENET
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(enet), okay)
 	/* 50 MHz ENET clock */
 	rootCfg.mux = kCLOCK_ENET1_ClockRoot_MuxSysPll1Div2;
 	rootCfg.div = 10;
 	CLOCK_SetRootClock(kCLOCK_Root_Enet1, &rootCfg);
+#if CONFIG_ETH_MCUX_RMII_EXT_CLK
+	/* Set ENET_REF_CLK as an input driven by PHY */
+	IOMUXC_GPR->GPR4 &= ~IOMUXC_GPR_GPR4_ENET_REF_CLK_DIR(0x01U);
+	IOMUXC_GPR->GPR4 |= IOMUXC_GPR_GPR4_ENET_TX_CLK_SEL(0x1U);
+#else
 	/* Set ENET_REF_CLK as an output driven by ENET1_CLK_ROOT */
 	IOMUXC_GPR->GPR4 |= (IOMUXC_GPR_GPR4_ENET_REF_CLK_DIR(0x01U) |
 		IOMUXC_GPR_GPR4_ENET_TX_CLK_SEL(0x1U));
+#endif
 #endif
 #if DT_NODE_HAS_STATUS(DT_NODELABEL(enet1g), okay)
 	/*
@@ -414,9 +427,15 @@ static ALWAYS_INLINE void clock_init(void)
 	rootCfg.mux = kCLOCK_ENET2_ClockRoot_MuxSysPll1Div2;
 	rootCfg.div = 10;
 	CLOCK_SetRootClock(kCLOCK_Root_Enet2, &rootCfg);
+#if CONFIG_ETH_MCUX_RMII_EXT_CLK
+	/* Set ENET1G_REF_CLK as an input driven by PHY */
+	IOMUXC_GPR->GPR5 &= ~IOMUXC_GPR_GPR5_ENET1G_REF_CLK_DIR(0x01U);
+	IOMUXC_GPR->GPR5 |= IOMUXC_GPR_GPR5_ENET1G_TX_CLK_SEL(0x1U);
+#else
 	/* Set ENET1G_REF_CLK as an output driven by ENET2_CLK_ROOT */
 	IOMUXC_GPR->GPR5 |= (IOMUXC_GPR_GPR5_ENET1G_REF_CLK_DIR(0x01U) |
 		IOMUXC_GPR_GPR5_ENET1G_TX_CLK_SEL(0x1U));
+#endif
 #endif
 #endif
 
@@ -636,13 +655,6 @@ void imxrt_post_init_display_interface(void)
 
 static int imxrt_init(void)
 {
-
-	unsigned int oldLevel; /* old interrupt lock level */
-
-	/* disable interrupts */
-	oldLevel = irq_lock();
-
-
 #if  defined(CONFIG_SECOND_CORE_MCUX) && defined(CONFIG_CPU_CORTEX_M7)
 	/**
 	 * Copy CM4 core from flash to memory. Note that depending on where the
@@ -666,52 +678,27 @@ static int imxrt_init(void)
 	MU_SetFlags(MU_BASE, BOOT_FLAG);
 #endif
 
-#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7) || defined(CONFIG_SOC_MIMXRT1165_CM7)
-#ifndef CONFIG_IMXRT1XXX_CODE_CACHE
-	/* SystemInit enables code cache, disable it here */
-	SCB_DisableICache();
-#else
-	/* z_arm_init_arch_hw_at_boot() disables code cache if CONFIG_ARCH_CACHE is enabled,
-	 * enable it here.
-	 */
-	SCB_EnableICache();
-#endif
 
-	if (IS_ENABLED(CONFIG_IMXRT1XXX_DATA_CACHE)) {
-		if ((SCB->CCR & SCB_CCR_DC_Msk) == 0) {
-			SCB_EnableDCache();
-		}
-	} else {
-		SCB_DisableDCache();
-	}
+#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7)
+	sys_cache_instr_enable();
+	sys_cache_data_enable();
 #endif
 
 	/* Initialize system clock */
 	clock_init();
 
-	/*
-	 * install default handler that simply resets the CPU
-	 * if configured in the kernel, NOP otherwise
-	 */
-	NMI_INIT();
-
-	/* restore interrupt state */
-	irq_unlock(oldLevel);
 	return 0;
 }
 
 #ifdef CONFIG_PLATFORM_SPECIFIC_INIT
 void z_arm_platform_init(void)
 {
-#if (DT_DEP_ORD(DT_NODELABEL(ocram)) != DT_DEP_ORD(DT_CHOSEN(zephyr_sram))) && \
-	CONFIG_OCRAM_NOCACHE
-	/* Copy data from flash to OCRAM */
-	memcpy(&__ocram_data_start, &__ocram_data_load_start,
-		(&__ocram_data_end - &__ocram_data_start));
-	/* Zero BSS region */
-	memset(&__ocram_bss_start, 0, (&__ocram_bss_end - &__ocram_bss_start));
-#endif
 	SystemInit();
+
+#if defined(FLEXRAM_RUNTIME_BANKS_USED)
+	/* Configure flexram if not running from RAM */
+	memc_flexram_dt_partition();
+#endif
 }
 #endif
 

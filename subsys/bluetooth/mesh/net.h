@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "adv.h"
 #include "subnet.h"
 #include <zephyr/bluetooth/mesh/sar_cfg.h>
 
@@ -35,7 +36,7 @@ enum bt_mesh_nonce_type;
 struct bt_mesh_node {
 	uint16_t addr;
 	uint16_t net_idx;
-	uint8_t  dev_key[16];
+	struct bt_mesh_key dev_key;
 	uint8_t  num_elem;
 };
 
@@ -229,10 +230,10 @@ struct bt_mesh_net {
 	/* Timer to track duration in current IV Update state */
 	struct k_work_delayable ivu_timer;
 
-	uint8_t dev_key[16];
+	struct bt_mesh_key dev_key;
 
 #if defined(CONFIG_BT_MESH_RPR_SRV)
-	uint8_t dev_key_cand[16];
+	struct bt_mesh_key dev_key_cand;
 #endif
 #if defined(CONFIG_BT_MESH_OD_PRIV_PROXY_SRV)
 	uint8_t on_demand_state;
@@ -283,7 +284,7 @@ extern struct bt_mesh_net bt_mesh;
 
 #define BT_MESH_NET_HDR_LEN 9
 
-int bt_mesh_net_create(uint16_t idx, uint8_t flags, const uint8_t key[16],
+int bt_mesh_net_create(uint16_t idx, uint8_t flags, const struct bt_mesh_key *key,
 		       uint32_t iv_index);
 
 bool bt_mesh_net_iv_update(uint32_t iv_index, bool iv_update);
@@ -291,7 +292,7 @@ bool bt_mesh_net_iv_update(uint32_t iv_index, bool iv_update);
 int bt_mesh_net_encode(struct bt_mesh_net_tx *tx, struct net_buf_simple *buf,
 		       enum bt_mesh_nonce_type type);
 
-int bt_mesh_net_send(struct bt_mesh_net_tx *tx, struct net_buf *buf,
+int bt_mesh_net_send(struct bt_mesh_net_tx *tx, struct bt_mesh_adv *adv,
 		     const struct bt_mesh_send_cb *cb, void *cb_data);
 
 int bt_mesh_net_decode(struct net_buf_simple *in, enum bt_mesh_net_if net_if,

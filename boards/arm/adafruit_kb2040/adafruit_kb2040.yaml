@@ -17,3 +17,7 @@ supported:
   - hwinfo
   - watchdog
   - pwm
+  - flash
+  - dma
+  - counter
+  - clock

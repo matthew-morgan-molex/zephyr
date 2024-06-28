@@ -185,7 +185,7 @@ Connections and IOs
 Nucleo U575ZI Q Board has 9 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -289,7 +289,7 @@ Debugging
 =========
 
 Default flasher for this board is openocd. It could be used in the usual way.
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -308,7 +308,7 @@ can be generated using ``nucleo_u575zi_q_ns`` as build target.
 
    $ west build -b nucleo_u575zi_q_ns path/to/source/directory
 
-Note: When building the ``*_ns`` image with TF-M, ``build/tfm/postbuild.sh`` bash script
+Note: When building the ``*_ns`` image with TF-M, ``build/tfm/api_ns/postbuild.sh`` bash script
 is run automatically in a post-build step to make some required flash layout changes.
 
 Once the build is completed, run the following script to initialize the option bytes.
@@ -328,10 +328,10 @@ Note: Check the ``build/tfm`` directory to ensure that the commands required by 
 (which is used for initialization) is available in the PATH.
 
 .. _STM32 Nucleo-144 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00615305.pdf
+   https://www.st.com/resource/en/user_manual/dm00615305.pdf
 
 .. _STM32U575ZI on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32u575zi.html
+   https://www.st.com/en/microcontrollers/stm32u575zi.html
 
 .. _STM32U575 reference manual:
    https://www.st.com/resource/en/reference_manual/rm0456-stm32u575585-armbased-32bit-mcus-stmicroelectronics.pdf

@@ -9,12 +9,15 @@ supported:
   - uart
   - i2c
   - spi
+  - can
   - counter
   - watchdog
   - entropy
   - pwm
   - dma
+  - input
 testing:
   ignore_tags:
     - net
     - bluetooth
+vendor: espressif

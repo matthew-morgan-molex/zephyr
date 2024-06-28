@@ -20,6 +20,21 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-m4";
 			reg = <0>;
+			cpu-power-states = <&idle &suspend_to_ram>;
+		};
+
+		power-states {
+			idle: idle {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-idle";
+				min-residency-us = <1000000>;
+			};
+
+			suspend_to_ram: suspend_to_ram {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-ram";
+				min-residency-us = <2000000>;
+			};
 		};
 	};
 
@@ -59,9 +74,6 @@
 			clk32kmon-valid-min = <4>;
 			xtal-enable-delay-ms = <300>;
 			pll-lock-timeout-ms = <30>;
-			/* pin configured only if the sources is set to PIN */
-			pinctrl-0 = <&clk_32khz_in_gpio165>;
-			pinctrl-names = "default";
 			#clock-cells = <3>;
 		};
 		ecia: ecia@4000e000 {
@@ -342,7 +354,7 @@
 			compatible = "microchip,xec-ps2";
 			reg = <0x40009000 0x40>;
 			interrupts = <100 1>;
-			girqs = <18 10>;
+			girqs = <18 10>, <21 18>;
 			pcrs = <3 5>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -352,7 +364,7 @@
 			compatible = "microchip,xec-ps2";
 			reg = <0x40009040 0x40>;
 			interrupts = <101 1>;
-			girqs = <18 11>;
+			girqs = <18 11>, <21 21>;
 			pcrs = <3 6>;
 			#address-cells = <1>;
 			#size-cells = <0>;

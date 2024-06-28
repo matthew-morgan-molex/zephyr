@@ -471,6 +471,16 @@ __syscall int flash_ex_op(const struct device *dev, uint16_t code,
 #define FLASH_EX_OP_VENDOR_BASE 0x8000
 #define FLASH_EX_OP_IS_VENDOR(c) ((c) & FLASH_EX_OP_VENDOR_BASE)
 
+/**
+ *  @brief Enumeration for extra flash operations
+ */
+enum flash_ex_op_types {
+	/*
+	 * Reset flash device.
+	 */
+	FLASH_EX_OP_RESET = 0,
+};
+
 static inline int z_impl_flash_ex_op(const struct device *dev, uint16_t code,
 				     const uintptr_t in, void *out)
 {
@@ -484,6 +494,11 @@ static inline int z_impl_flash_ex_op(const struct device *dev, uint16_t code,
 
 	return api->ex_op(dev, code, in, out);
 #else
+	ARG_UNUSED(dev);
+	ARG_UNUSED(code);
+	ARG_UNUSED(in);
+	ARG_UNUSED(out);
+
 	return -ENOSYS;
 #endif /* CONFIG_FLASH_EX_OP_ENABLED */
 }

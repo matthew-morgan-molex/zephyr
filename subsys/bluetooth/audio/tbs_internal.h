@@ -172,18 +172,16 @@ static inline const char *bt_tbs_term_reason_str(uint8_t reason)
  * character. Minimal uri is "a:b".
  *
  * @param uri The uri "scheme:id"
+ * @param len The length of uri
  * @return true If the above is true
  * @return false If the above is not true
  */
-static inline bool bt_tbs_valid_uri(const char *uri)
+static inline bool bt_tbs_valid_uri(const char *uri, size_t len)
 {
-	size_t len;
-
 	if (!uri) {
 		return false;
 	}
 
-	len = strlen(uri);
 	if (len > CONFIG_BT_TBS_MAX_URI_LENGTH ||
 	    len < BT_TBS_MIN_URI_LEN) {
 		return false;
@@ -331,7 +329,6 @@ struct bt_tbs_instance {
 	uint16_t termination_reason_handle;
 
 	bool busy;
-	uint8_t subscribe_cnt;
 #if defined(CONFIG_BT_TBS_CLIENT_CCID)
 	uint8_t ccid;
 #endif /* defined(CONFIG_BT_TBS_CLIENT_CCID) */

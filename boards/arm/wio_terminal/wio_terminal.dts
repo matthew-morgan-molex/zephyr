@@ -9,6 +9,7 @@
 #include "grove_connectors.dtsi"
 #include "raspberrypi_40pins_connector.dtsi"
 #include <zephyr/dt-bindings/display/ili9xxx.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "Wio Terminal";
@@ -47,39 +48,54 @@
 	};
 
 	/* Buttons */
-	gpio_keys {
+	buttons: buttons {
 		compatible = "gpio-keys";
 		user_button_0: button_0 {
 			label = "User Button 0";
 			gpios = <&portc 26 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
 		};
 		user_button_1: button_1 {
 			label = "User Button 1";
 			gpios = <&portc 27 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_1>;
 		};
 		user_button_2: button_2 {
 			label = "User Button 2";
 			gpios = <&portc 28 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_2>;
 		};
+	};
+
+	/* Joystick */
+	joystick: joystick {
+		compatible = "gpio-keys";
+		polling-mode;
+		debounce-interval-ms = <100>;
 		joy_sel: joystick_selection {
 			label = "joystick selection";
 			gpios = <&portd 10 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_ENTER>;
 		};
 		joy_down: joystick_down {
 			label = "joystick down";
 			gpios = <&portd 8 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_DOWN>;
 		};
 		joy_up: joystick_up {
 			label = "joystick up";
 			gpios = <&portd 20 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_UP>;
 		};
 		joy_left: joystick_left {
 			label = "joystick left";
 			gpios = <&portd 12 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_LEFT>;
 		};
 		joy_right: joystick_right {
 			label = "joystick right";
 			gpios = <&portd 9 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_RIGHT>;
 		};
 	};
 
@@ -106,6 +122,27 @@
 		compatible = "regulator-fixed";
 		regulator-name = "usb_power_5v_en";
 		enable-gpios = <&porta 27 GPIO_ACTIVE_LOW>;
+	};
+
+	/* LCD */
+	mipi_dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		dc-gpios = <&portc 6 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&portc 7 GPIO_ACTIVE_LOW>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		spi-dev = <&sercom7>;
+		write-only;
+
+		ili9341: ili9341@0 {
+			compatible = "ilitek,ili9341";
+			mipi-max-frequency = <24000000>;
+			reg = <0>;
+			pixel-format = <ILI9XXX_PIXEL_FORMAT_RGB565>;
+			rotation = <270>;
+			width = <320>;
+			height = <240>;
+		};
 	};
 };
 
@@ -255,19 +292,6 @@
 	pinctrl-0 = <&sercom7_spi_default>;
 	pinctrl-names = "default";
 	cs-gpios = <&portb 21 GPIO_ACTIVE_LOW>;
-
-	/* LCD */
-	ili9341: ili9341@0 {
-		compatible = "ilitek,ili9341";
-		spi-max-frequency = <24000000>;
-		reg = <0>;
-		cmd-data-gpios = <&portc 6 GPIO_ACTIVE_LOW>;
-		reset-gpios = <&portc 7 GPIO_ACTIVE_LOW>;
-		pixel-format = <ILI9XXX_PIXEL_FORMAT_RGB565>;
-		rotation = <270>;
-		width = <320>;
-		height = <240>;
-	};
 };
 
 /* USB */

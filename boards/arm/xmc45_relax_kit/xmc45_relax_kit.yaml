@@ -12,5 +12,8 @@ supported:
   - gpio
   - spi
   - uart
+  - watchdog
+  - netif:eth
 ram: 160
 flash: 1024
+vendor: infineon

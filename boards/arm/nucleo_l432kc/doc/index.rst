@@ -137,7 +137,7 @@ Available pins:
    :align: center
    :alt: Nucleo L432KC Arduino connectors
 
-For mode details please refer to `STM32 Nucleo-32 board User Manual`_.
+For more details please refer to `STM32 Nucleo-32 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -217,13 +217,13 @@ You can debug an application in the usual way.  Here is an example for the
    :goals: debug
 
 .. _Nucleo L432KC website:
-   http://www.st.com/en/evaluation-tools/nucleo-l432kc.html
+   https://www.st.com/en/evaluation-tools/nucleo-l432kc.html
 
 .. _STM32 Nucleo-32 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00231744.pdf
+   https://www.st.com/resource/en/user_manual/dm00231744.pdf
 
 .. _STM32L432KC on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32l432kc.html
+   https://www.st.com/en/microcontrollers/stm32l432kc.html
 
 .. _STM32L432 reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00151940.pdf
+   https://www.st.com/resource/en/reference_manual/dm00151940.pdf

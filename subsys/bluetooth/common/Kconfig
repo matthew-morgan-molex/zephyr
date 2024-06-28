@@ -9,6 +9,7 @@ menu "Bluetooth buffer configuration"
 config BT_BUF_ACL_TX_SIZE
 	int "Maximum supported ACL size for outgoing data"
 	range 27 65535
+	default 37 if BT_MESH_GATT
 	default 27
 	help
 	  Maximum supported ACL size of data packets sent from the Host to the
@@ -32,6 +33,7 @@ config BT_BUF_ACL_TX_SIZE
 config BT_BUF_ACL_TX_COUNT
 	int "Number of outgoing ACL data buffers"
 	default 7 if BT_HCI_RAW
+	default 4 if BT_MESH_GATT
 	default 3
 	range 1 255
 	help
@@ -48,11 +50,9 @@ config BT_BUF_ACL_TX_COUNT
 config BT_BUF_ACL_RX_SIZE
 	int "Maximum supported ACL size for incoming data"
 	default 200 if BT_BREDR
-	# Mesh Proxy Recommended: 64 Pkey + 2 Bytes Mesh header.
-	# Overhead: ATT Write command Header (3) in an L2CAP PDU (4).
-	default 73 if BT_MESH_GATT
 	default 70 if BT_EATT
 	default 69 if BT_SMP
+	default 37 if BT_MESH_GATT
 	default 27
 	range 70 65535 if BT_EATT
 	range 69 65535 if BT_SMP
@@ -243,7 +243,7 @@ config BT_HCI_MESH_EXT
 	bool "Mesh HCI Command support"
 	depends on BT_BROADCASTER && BT_OBSERVER && !BT_LL_SW_SPLIT
 	help
-	  Enable support for the Bluetooth mesh HCI Commands.
+	  Enable support for the Bluetooth Mesh HCI Commands.
 
 config BT_WAIT_NOP
 	bool "Wait for \"NOP\" Command Complete event during init"
@@ -283,6 +283,7 @@ endif # BT_ASSERT
 
 config BT_MONITOR
 	bool
+	select LOG_OUTPUT
 
 choice BT_DEBUG_TYPE
 	prompt "Bluetooth debug type"

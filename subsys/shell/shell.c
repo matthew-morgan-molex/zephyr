@@ -952,7 +952,11 @@ static bool process_nl(const struct shell *sh, uint8_t data)
 #define SHELL_ASCII_MAX_CHAR (127u)
 static inline int ascii_filter(const char data)
 {
-	return (uint8_t) data > SHELL_ASCII_MAX_CHAR ? -EINVAL : 0;
+	if (IS_ENABLED(CONFIG_SHELL_ASCII_FILTER)) {
+		return (uint8_t) data > SHELL_ASCII_MAX_CHAR ? -EINVAL : 0;
+	} else {
+		return 0;
+	}
 }
 
 static void state_collect(const struct shell *sh)
@@ -1303,25 +1307,22 @@ static void kill_handler(const struct shell *sh)
 
 	sh->ctx->tid = NULL;
 	k_thread_abort(k_current_get());
+
+	CODE_UNREACHABLE;
 }
 
 void shell_thread(void *shell_handle, void *arg_log_backend,
 		  void *arg_log_level)
 {
 	struct shell *sh = shell_handle;
-	bool log_backend = (bool)arg_log_backend;
-	uint32_t log_level = POINTER_TO_UINT(arg_log_level);
 	int err;
+
+	z_flag_handle_log_set(sh, (bool)arg_log_backend);
+	sh->ctx->log_level = POINTER_TO_UINT(arg_log_level);
 
 	err = sh->iface->api->enable(sh->iface, false);
 	if (err != 0) {
 		return;
-	}
-
-	if (IS_ENABLED(CONFIG_SHELL_LOG_BACKEND) && log_backend
-	    && !IS_ENABLED(CONFIG_SHELL_START_OBSCURED)) {
-		z_shell_log_backend_enable(sh->log_backend, (void *)sh,
-					   log_level);
 	}
 
 	if (IS_ENABLED(CONFIG_SHELL_AUTOSTART)) {
@@ -1386,7 +1387,7 @@ int shell_init(const struct shell *sh, const void *transport_config,
 				  SHELL_THREAD_PRIORITY, 0, K_NO_WAIT);
 
 	sh->ctx->tid = tid;
-	k_thread_name_set(tid, sh->thread_name);
+	k_thread_name_set(tid, sh->name);
 
 	return 0;
 }
@@ -1424,6 +1425,11 @@ int shell_start(const struct shell *sh)
 		return -ENOTSUP;
 	}
 
+	if (IS_ENABLED(CONFIG_SHELL_LOG_BACKEND) && z_flag_handle_log_get(sh)
+	    && !z_flag_obscure_get(sh)) {
+		z_shell_log_backend_enable(sh->log_backend, (void *)sh, sh->ctx->log_level);
+	}
+
 	k_mutex_lock(&sh->ctx->wr_mtx, K_FOREVER);
 
 	if (IS_ENABLED(CONFIG_SHELL_VT100_COLORS)) {
@@ -1454,6 +1460,8 @@ int shell_stop(const struct shell *sh)
 
 	state_set(sh, SHELL_STATE_INITIALIZED);
 
+	z_shell_log_backend_disable(sh->log_backend);
+
 	return 0;
 }
 
@@ -1480,6 +1488,17 @@ void shell_process(const struct shell *sh)
 
 	/* atomically clear the processing flag */
 	z_flag_processing_set(sh, false);
+}
+
+const struct shell *shell_backend_get_by_name(const char *backend_name)
+{
+	STRUCT_SECTION_FOREACH(shell, backend) {
+		if (strcmp(backend_name, backend->name) == 0) {
+			return backend;
+		}
+	}
+
+	return NULL;
 }
 
 /* This function mustn't be used from shell context to avoid deadlock.

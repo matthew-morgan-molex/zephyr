@@ -17,7 +17,7 @@ LOG_MODULE_REGISTER(net_test, NET_LOG_LEVEL);
 #include <string.h>
 #include <errno.h>
 #include <zephyr/sys/printk.h>
-#include <zephyr/random/rand32.h>
+#include <zephyr/random/random.h>
 
 #include <zephyr/ztest.h>
 
@@ -1040,7 +1040,7 @@ static void test_virtual_recv_data_from_tunnel(int remote_ip,
 	net_pkt_cursor_init(outer);
 
 	if (peer_addr.sa_family == AF_INET) {
-		verdict = net_ipv4_input(outer);
+		verdict = net_ipv4_input(outer, false);
 	} else {
 		verdict = net_ipv6_input(outer, false);
 	}
