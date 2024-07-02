@@ -44,6 +44,7 @@ struct mcux_lpi2c_config {
 	void (*irq_config_func)(const struct device *dev);
 	uint32_t bitrate;
 	uint32_t bus_idle_timeout_ns;
+        uint32_t pin_low_timeout_ns;
 	const struct pinctrl_dev_config *pincfg;
 #ifdef CONFIG_I2C_MCUX_LPI2C_BUS_RECOVERY
 	struct gpio_dt_spec scl;
@@ -555,7 +556,7 @@ static int mcux_lpi2c_init(const struct device *dev)
 
 	base = (LPI2C_Type *)DEVICE_MMIO_NAMED_GET(dev, reg_base);
 
-	k_sem_init(&data->lock, 1, 1);
+	k_mutex_init(&data->lock);
 	k_sem_init(&data->device_sync_sem, 0, K_SEM_MAX_LIMIT);
 
 	if (!device_is_ready(config->clock_dev)) {

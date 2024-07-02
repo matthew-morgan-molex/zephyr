@@ -140,7 +140,7 @@ manifest:
         - fs
     - name: hal_nxp
       remote: bittware
-      revision: b6a8f7ba86470acfa6ac2d13fec2d0c9608e8d1c
+      revision: be20116f50d6e1e59dfbe33067db1abf110c2c3a
       path: modules/hal/nxp
       groups:
         - hal
