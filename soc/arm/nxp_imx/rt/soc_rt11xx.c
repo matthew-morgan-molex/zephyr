@@ -679,7 +679,7 @@ static int imxrt_init(void)
 #endif
 
 
-#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7)
+#if defined(CONFIG_SOC_MIMXRT1176_CM7) || defined(CONFIG_SOC_MIMXRT1166_CM7) || defined(CONFIG_SOC_MIMXRT1165_CM7)
 	sys_cache_instr_enable();
 	sys_cache_data_enable();
 #endif
