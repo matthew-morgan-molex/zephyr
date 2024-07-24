@@ -408,15 +408,20 @@ static void mcp23xxx_work_handler(struct k_work *work)
 	ret = read_port_regs(dev, REG_INTF, &intf);
 	if (ret != 0) {
 		LOG_ERR("Failed to read INTF");
-		goto done;
+		goto fail;
 	}
 
 	if (!intf) {
-		/* Probable cause: REG_GPIO was read from somewhere else before the interrupt
-		 * handler had a chance to run
+		/* Probable causes:
+		 * - REG_GPIO was read from somewhere else before the interrupt handler had a chance
+		 *   to run
+		 * - Even though the datasheet says differently, reading INTCAP while a level
+		 *   interrupt is active briefly (~2ns) causes the interrupt line to go high and
+		 *   low again. This causes a second ISR to be scheduled, which then won't
+		 *   find any active interrupts if the callback has disabled the level interrupt.
 		 */
 		LOG_ERR("Spurious interrupt");
-		goto done;
+		goto fail;
 	}
 
 	uint16_t intcap;
@@ -425,7 +430,7 @@ static void mcp23xxx_work_handler(struct k_work *work)
 	ret = read_port_regs(dev, REG_INTCAP, &intcap);
 	if (ret != 0) {
 		LOG_ERR("Failed to read INTCAP");
-		goto done;
+		goto fail;
 	}
 
 	/* mcp23xxx does not support single-edge interrupts in hardware, filter them out manually */
@@ -434,8 +439,11 @@ static void mcp23xxx_work_handler(struct k_work *work)
 	intf &= level_ints | (intcap & drv_data->rising_edge_ints) |
 		(~intcap & drv_data->falling_edge_ints);
 
+	k_sem_give(&drv_data->lock);
 	gpio_fire_callbacks(&drv_data->callbacks, dev, intf);
-done:
+	return;
+
+fail:
 	k_sem_give(&drv_data->lock);
 }
 
@@ -512,7 +520,7 @@ int gpio_mcp23xxx_init(const struct device *dev)
 			}
 		}
 
-		if (!device_is_ready(config->gpio_int.port)) {
+		if (!gpio_is_ready_dt(&config->gpio_int)) {
 			LOG_ERR("INT port is not ready");
 			return -ENODEV;
 		}

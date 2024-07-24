@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(net_websocket_client_sample, LOG_LEVEL_DBG);
 #include <zephyr/net/socket.h>
 #include <zephyr/net/tls_credentials.h>
 #include <zephyr/net/websocket.h>
-#include <zephyr/random/rand32.h>
+#include <zephyr/random/random.h>
 #include <zephyr/shell/shell.h>
 
 #include "ca_certificate.h"
@@ -431,8 +431,16 @@ int main(void)
 		close(websock4);
 	}
 
+	if (sock4 >= 0) {
+		close(sock4);
+	}
+
 	if (websock6 >= 0) {
 		close(websock6);
+	}
+
+	if (sock6 >= 0) {
+		close(sock6);
 	}
 
 	k_sleep(K_FOREVER);

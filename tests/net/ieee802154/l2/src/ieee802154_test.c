@@ -15,6 +15,7 @@ LOG_MODULE_REGISTER(net_ieee802154_test, LOG_LEVEL_DBG);
 #include <zephyr/net/ethernet.h>
 #include <zephyr/net/ieee802154.h>
 #include <zephyr/net/ieee802154_mgmt.h>
+#include <zephyr/net/ieee802154_radio.h>
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/net_pkt.h>
@@ -22,7 +23,7 @@ LOG_MODULE_REGISTER(net_ieee802154_test, LOG_LEVEL_DBG);
 
 #include "net_private.h"
 #include <ieee802154_frame.h>
-#include <ieee802154_radio_utils.h>
+#include <ieee802154_priv.h>
 #include <ipv6.h>
 
 struct ieee802154_pkt_test {
@@ -161,10 +162,12 @@ uint8_t raw_payload[] = {
 #define RAW_MAC_PAYLOAD_START_INDEX 17
 #define RAW_MAC_PAYLOAD_LENGTH 3
 
+#define MOCK_PAN_ID 0xabcd
+
 extern struct net_pkt *current_pkt;
 extern struct k_sem driver_lock;
 
-static struct net_if *iface;
+static struct net_if *net_iface;
 
 static void pkt_hexdump(uint8_t *pkt, uint8_t length)
 {
@@ -200,36 +203,91 @@ static void ieee_addr_hexdump(uint8_t *addr, uint8_t length)
 	printk("%02x\n", *addr);
 }
 
-static int set_up_short_addr(struct net_if *iface, struct ieee802154_context *ctx)
+static int disassociate(struct net_if *iface, struct ieee802154_context *ctx)
 {
-	uint16_t short_addr = 0x5678;
+	uint16_t short_addr_not_associated = IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED;
+	int ret;
 
-	int ret = net_mgmt(NET_REQUEST_IEEE802154_SET_SHORT_ADDR, iface, &short_addr,
-			   sizeof(short_addr));
-	if (ret) {
-		NET_ERR("*** Failed to set short address\n");
+	if (ctx->short_addr == IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED) {
+		return 0;
 	}
 
-	return ret;
+	ret = net_mgmt(NET_REQUEST_IEEE802154_SET_SHORT_ADDR, iface,
+		       &short_addr_not_associated,
+		       sizeof(short_addr_not_associated));
+	if (ret) {
+		NET_ERR("*** Failed to %s.", __func__);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int associate(struct net_if *iface, struct ieee802154_context *ctx, uint16_t short_addr)
+{
+	uint16_t mock_pan_id = MOCK_PAN_ID;
+	int ret;
+
+	if (ctx->short_addr == short_addr) {
+		return -EALREADY;
+	}
+
+	ret = net_mgmt(NET_REQUEST_IEEE802154_SET_PAN_ID, iface, &mock_pan_id,
+		       sizeof(mock_pan_id));
+	if (ret) {
+		NET_ERR("*** Failed to set PAN ID in %s.", __func__);
+		return ret;
+	}
+
+	ret = net_mgmt(NET_REQUEST_IEEE802154_SET_SHORT_ADDR, iface, &short_addr,
+		       sizeof(short_addr));
+	if (ret) {
+		NET_ERR("*** Failed to set short addr in %s.", __func__);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int set_up_short_addr(struct net_if *iface, struct ieee802154_context *ctx)
+{
+	const uint16_t mock_short_addr = 0x5678;
+	int ret;
+
+	ret = disassociate(iface, ctx);
+	if (ret) {
+		return ret;
+	}
+
+	ret = associate(iface, ctx, mock_short_addr);
+	if (ret) {
+		return ret;
+	}
+
+	return 0;
 }
 
 static int tear_down_short_addr(struct net_if *iface, struct ieee802154_context *ctx)
 {
-	uint16_t short_addr;
+	uint16_t no_short_addr_assigned = IEEE802154_NO_SHORT_ADDRESS_ASSIGNED;
+	int ret;
 
 	if (ctx->linkaddr.len != IEEE802154_SHORT_ADDR_LENGTH) {
 		/* nothing to do */
 		return 0;
 	}
 
-	short_addr = IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED;
-	int ret = net_mgmt(NET_REQUEST_IEEE802154_SET_SHORT_ADDR, iface, &short_addr,
-			   sizeof(short_addr));
+	ret = disassociate(iface, ctx);
 	if (ret) {
-		NET_ERR("*** Failed to unset short address\n");
+		return ret;
 	}
 
-	return ret;
+	ret = associate(iface, ctx, no_short_addr_assigned);
+	if (ret) {
+		return ret;
+	}
+
+	return 0;
 }
 
 static struct net_pkt *get_data_pkt_with_ar(void)
@@ -240,7 +298,7 @@ static struct net_pkt *get_data_pkt_with_ar(void)
 		0x61, 0xd8,					/* FCF with AR bit set */
 		0x16,						/* Sequence */
 		0xcd, 0xab,					/* Destination PAN */
-		0xff, 0xff,					/* Destination Address */
+		0x78, 0x56,					/* Destination Address */
 		0xc2, 0xa3, 0x9e, 0x00, 0x00, 0x4b, 0x12, 0x00, /* Source Address */
 		/* IEEE 802.15.4 MAC Payload */
 		0x7b, 0x39, /* IPHC header, SAM: compressed, DAM: 48-bits inline */
@@ -259,10 +317,10 @@ static struct net_pkt *get_data_pkt_with_ar(void)
 	};
 	struct net_pkt *pkt;
 
-	pkt = net_pkt_rx_alloc_with_buffer(iface, sizeof(data_pkt_with_ar), AF_UNSPEC, 0,
+	pkt = net_pkt_rx_alloc_with_buffer(net_iface, sizeof(data_pkt_with_ar), AF_UNSPEC, 0,
 					   K_FOREVER);
 	if (!pkt) {
-		NET_ERR("*** No buffer to allocate\n");
+		NET_ERR("*** No buffer to allocate");
 		return NULL;
 	}
 
@@ -274,10 +332,16 @@ static struct net_pkt *get_data_pkt_with_ar(void)
 #ifdef CONFIG_NET_SOCKETS
 static bool set_up_security(uint8_t security_level)
 {
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
+	uint16_t saved_short_addr = ctx->short_addr;
 	struct ieee802154_security_params params;
 
 	if (security_level == IEEE802154_SECURITY_LEVEL_NONE) {
 		return true;
+	}
+
+	if (disassociate(net_iface, ctx) != 0) {
+		return false;
 	}
 
 	params = (struct ieee802154_security_params){
@@ -288,31 +352,50 @@ static bool set_up_security(uint8_t security_level)
 		.level = security_level,
 	};
 
-	if (net_mgmt(NET_REQUEST_IEEE802154_SET_SECURITY_SETTINGS, iface, &params,
+	if (net_mgmt(NET_REQUEST_IEEE802154_SET_SECURITY_SETTINGS, net_iface, &params,
 		     sizeof(struct ieee802154_security_params))) {
-		NET_ERR("*** Failed to set security settings\n");
+		NET_ERR("*** Failed to set security settings");
+		return false;
+	}
+
+	if (saved_short_addr != IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED &&
+	    associate(net_iface, ctx, saved_short_addr) != 0) {
 		return false;
 	}
 
 	return true;
 }
 
-static void tear_down_security(void)
+static bool tear_down_security(void)
 {
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
+	uint16_t saved_short_addr = ctx->short_addr;
 	struct ieee802154_security_params params = {
 		.level = IEEE802154_SECURITY_LEVEL_NONE,
 	};
 
-	if (net_mgmt(NET_REQUEST_IEEE802154_SET_SECURITY_SETTINGS, iface, &params,
-		     sizeof(struct ieee802154_security_params))) {
-		NET_ERR("*** Failed to tear down security settings\n");
+	if (disassociate(net_iface, ctx) != 0) {
+		return false;
 	}
+
+	if (net_mgmt(NET_REQUEST_IEEE802154_SET_SECURITY_SETTINGS, net_iface, &params,
+		     sizeof(struct ieee802154_security_params))) {
+		NET_ERR("*** Failed to tear down security settings");
+		return false;
+	}
+
+	if (saved_short_addr != IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED &&
+	    associate(net_iface, ctx, saved_short_addr) != 0) {
+		return false;
+	}
+
+	return true;
 }
 
 static int set_up_recv_socket(enum net_sock_type socket_type)
 {
 	struct sockaddr_ll socket_sll = {
-		.sll_ifindex = net_if_get_by_iface(iface),
+		.sll_ifindex = net_if_get_by_iface(net_iface),
 		.sll_family = AF_PACKET,
 		.sll_protocol = ETH_P_IEEE802154,
 	};
@@ -324,17 +407,17 @@ static int set_up_recv_socket(enum net_sock_type socket_type)
 
 	fd = socket(AF_PACKET, socket_type, ETH_P_IEEE802154);
 	if (fd < 0) {
-		NET_ERR("*** Failed to create recv socket : %d\n", errno);
+		NET_ERR("*** Failed to create recv socket : %d", errno);
 		return fd;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&socket_sll, sizeof(struct sockaddr_ll))) {
-		NET_ERR("*** Failed to bind packet socket : %d\n", errno);
+		NET_ERR("*** Failed to bind packet socket : %d", errno);
 		goto release_fd;
 	}
 
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeo_optval, sizeof(timeo_optval))) {
-		NET_ERR("*** Failed to set reception timeout on packet socket : %d\n", errno);
+		NET_ERR("*** Failed to set reception timeout on packet socket : %d", errno);
 		goto release_fd;
 	}
 
@@ -350,32 +433,31 @@ static bool test_packet_parsing(struct ieee802154_pkt_test *t)
 {
 	struct ieee802154_mpdu mpdu = {0};
 
-	NET_INFO("- Parsing packet 0x%p of frame %s\n", t->pkt, t->name);
+	NET_INFO("- Parsing packet 0x%p of frame %s", t->pkt, t->name);
 
 	if (!ieee802154_validate_frame(t->pkt, t->length, &mpdu)) {
-		NET_ERR("*** Could not validate frame %s\n", t->name);
+		NET_ERR("*** Could not validate frame %s", t->name);
 		return false;
 	}
 
 	if (mpdu.mhr.fs != t->mhr_check.fc_seq ||
 	    mpdu.mhr.dst_addr != t->mhr_check.dst_addr ||
 	    mpdu.mhr.src_addr != t->mhr_check.src_addr) {
-		NET_INFO("d: %p vs %p -- s: %p vs %p\n",
+		NET_INFO("d: %p vs %p -- s: %p vs %p",
 			 mpdu.mhr.dst_addr, t->mhr_check.dst_addr,
 			 mpdu.mhr.src_addr, t->mhr_check.src_addr);
-		NET_ERR("*** Wrong MPDU information on frame %s\n",
-			t->name);
+		NET_ERR("*** Wrong MPDU information on frame %s", t->name);
 
 		return false;
 	}
 
 	if (mpdu.mhr.fs->sequence != t->sequence) {
-		NET_ERR("*** Invalid sequence number\n", t->name);
+		NET_ERR("*** Invalid sequence number for frame %s", t->name);
 		return false;
 	}
 
 	if (mpdu.payload_length != t->payload_length) {
-		NET_ERR("*** Invalid payload length\n", t->name);
+		NET_ERR("*** Invalid payload length for frame %s", t->name);
 		return false;
 	}
 
@@ -384,34 +466,32 @@ static bool test_packet_parsing(struct ieee802154_pkt_test *t)
 
 static bool test_ns_sending(struct ieee802154_pkt_test *t, bool with_short_addr)
 {
-	struct ieee802154_context *ctx = net_if_l2_data(iface);
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
 	struct ieee802154_mpdu mpdu;
 	bool result = false;
 
-	NET_INFO("- Sending NS packet\n");
+	NET_INFO("- Sending NS packet");
 
 	/* ensure reproducible results */
 	ctx->sequence = t->sequence;
 
-	if (with_short_addr) {
-		if (set_up_short_addr(iface, ctx)) {
-			goto out;
-		}
-	}
-
-	if (net_ipv6_send_ns(iface, NULL, &t->src, &t->dst, &t->dst, false)) {
-		NET_ERR("*** Could not create IPv6 NS packet\n");
-		tear_down_short_addr(iface, ctx);
+	if (with_short_addr && set_up_short_addr(net_iface, ctx)) {
 		goto out;
 	}
 
-	tear_down_short_addr(iface, ctx);
+	if (net_ipv6_send_ns(net_iface, NULL, &t->src, &t->dst, &t->dst, false)) {
+		NET_ERR("*** Could not create IPv6 NS packet");
+		tear_down_short_addr(net_iface, ctx);
+		goto out;
+	}
+
+	tear_down_short_addr(net_iface, ctx);
 
 	k_yield();
 	k_sem_take(&driver_lock, K_SECONDS(1));
 
 	if (!current_pkt->frags) {
-		NET_ERR("*** Could not send IPv6 NS packet\n");
+		NET_ERR("*** Could not send IPv6 NS packet");
 		goto out;
 	}
 
@@ -420,14 +500,14 @@ static bool test_ns_sending(struct ieee802154_pkt_test *t, bool with_short_addr)
 	if (!with_short_addr) {
 		if (net_pkt_get_len(current_pkt) != t->length ||
 		    memcmp(net_pkt_data(current_pkt), t->pkt, t->length)) {
-			NET_ERR("*** Sent packet deviates from expected packet\n");
+			NET_ERR("*** Sent packet deviates from expected packet");
 			goto release_frag;
 		}
 	}
 
 	if (!ieee802154_validate_frame(net_pkt_data(current_pkt),
 				       net_pkt_get_len(current_pkt), &mpdu)) {
-		NET_ERR("*** Sent packet is not valid\n");
+		NET_ERR("*** Sent packet is not valid");
 		goto release_frag;
 	}
 
@@ -442,59 +522,58 @@ out:
 
 static bool test_wait_for_ack(struct ieee802154_pkt_test *t)
 {
-	struct ieee802154_context *ctx = net_if_l2_data(iface);
 	struct ieee802154_mpdu mpdu;
-	struct net_pkt *ack_pkt;
+	struct net_pkt *one_ack_pkt;
 	struct net_pkt *tx_pkt;
 	bool result = false;
 	bool ack_required;
 
-	NET_INFO("- Waiting for ACK reply when sending a data packet\n");
+	NET_INFO("- Waiting for ACK reply when sending a data packet");
 
 	tx_pkt = get_data_pkt_with_ar();
 	if (!tx_pkt) {
 		goto out;
 	}
 
-	ack_required = prepare_for_ack(ctx, tx_pkt, tx_pkt->frags);
+	ack_required = ieee802154_prepare_for_ack(net_iface, tx_pkt, tx_pkt->frags);
 	if (!ack_required) {
-		NET_ERR("*** Expected AR flag to be set\n");
+		NET_ERR("*** Expected AR flag to be set");
 		goto release_tx_pkt;
 	}
 
 	if (!ieee802154_validate_frame(net_pkt_data(tx_pkt), net_pkt_get_len(tx_pkt), &mpdu)) {
-		NET_ERR("*** Could not parse data pkt.\n");
+		NET_ERR("*** Could not parse data pkt.");
 		goto release_tx_pkt;
 	}
 
-	ack_pkt = net_pkt_rx_alloc_with_buffer(iface, IEEE802154_ACK_PKT_LENGTH, AF_UNSPEC, 0,
-					       K_FOREVER);
-	if (!ack_pkt) {
-		NET_ERR("*** Could not allocate ack pkt.\n");
+	one_ack_pkt = net_pkt_rx_alloc_with_buffer(net_iface, IEEE802154_ACK_PKT_LENGTH,
+						   AF_UNSPEC, 0, K_FOREVER);
+	if (!one_ack_pkt) {
+		NET_ERR("*** Could not allocate ack pkt.");
 		goto release_tx_pkt;
 	}
 
-	if (!ieee802154_create_ack_frame(iface, ack_pkt, mpdu.mhr.fs->sequence)) {
-		NET_ERR("*** Could not create ack frame.\n");
+	if (!ieee802154_create_ack_frame(net_iface, one_ack_pkt, mpdu.mhr.fs->sequence)) {
+		NET_ERR("*** Could not create ack frame.");
 		goto release_tx_pkt;
 	}
 
-	pkt_hexdump(net_pkt_data(ack_pkt), net_pkt_get_len(ack_pkt));
+	pkt_hexdump(net_pkt_data(one_ack_pkt), net_pkt_get_len(one_ack_pkt));
 
-	if (handle_ack(ctx, ack_pkt) != NET_OK) {
-		NET_ERR("*** Ack frame was not handled.\n");
+	if (ieee802154_handle_ack(net_iface, one_ack_pkt) != NET_OK) {
+		NET_ERR("*** Ack frame was not handled.");
 		goto release_ack_pkt;
 	}
 
-	if (wait_for_ack(iface, ack_required) != 0) {
-		NET_ERR("*** Ack frame was not recorded.\n");
+	if (ieee802154_wait_for_ack(net_iface, ack_required) != 0) {
+		NET_ERR("*** Ack frame was not recorded.");
 		goto release_ack_pkt;
 	}
 
 	result = true;
 
 release_ack_pkt:
-	net_pkt_unref(ack_pkt);
+	net_pkt_unref(one_ack_pkt);
 release_tx_pkt:
 	net_pkt_unref(tx_pkt);
 out:
@@ -506,11 +585,11 @@ static bool test_packet_cloning_with_cb(void)
 	struct net_pkt *pkt;
 	struct net_pkt *cloned_pkt;
 
-	NET_INFO("- Cloning packet\n");
+	NET_INFO("- Cloning packet");
 
-	pkt = net_pkt_rx_alloc_with_buffer(iface, 64, AF_UNSPEC, 0, K_NO_WAIT);
+	pkt = net_pkt_rx_alloc_with_buffer(net_iface, 64, AF_UNSPEC, 0, K_NO_WAIT);
 	if (!pkt) {
-		NET_ERR("*** No buffer to allocate\n");
+		NET_ERR("*** No buffer to allocate");
 		return false;
 	}
 
@@ -524,7 +603,6 @@ static bool test_packet_cloning_with_cb(void)
 
 	zassert_true(net_pkt_ieee802154_ack_fpb(cloned_pkt));
 	zassert_true(net_pkt_ieee802154_frame_secured(cloned_pkt));
-	zassert_false(net_pkt_ieee802154_arb(cloned_pkt));
 	zassert_false(net_pkt_ieee802154_mac_hdr_rdy(cloned_pkt));
 	zassert_equal(net_pkt_ieee802154_lqi(cloned_pkt), 50U);
 	zassert_equal(net_pkt_ieee802154_rssi(cloned_pkt), 0U);
@@ -535,12 +613,74 @@ static bool test_packet_cloning_with_cb(void)
 	return true;
 }
 
+static bool test_packet_rssi_conversion(void)
+{
+	uint8_t raw_signed_rssi_dbm;
+	int8_t signed_rssi_dbm;
+	struct net_pkt *pkt;
+
+	NET_INFO("- RSSI conversion between unsigned and signed representation");
+
+	pkt = net_pkt_rx_alloc_on_iface(net_iface, K_NO_WAIT);
+	if (!pkt) {
+		NET_ERR("*** No pkt to allocate");
+		return false;
+	}
+
+	/* Test setting/getting of unsigned RSSI. */
+	net_pkt_set_ieee802154_rssi(pkt, 50U);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), 50U);
+
+	/* Test setting/getting of signed RSSI (in range). */
+	net_pkt_set_ieee802154_rssi_dbm(pkt, IEEE802154_MAC_RSSI_DBM_MIN);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), IEEE802154_MAC_RSSI_MIN);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), IEEE802154_MAC_RSSI_DBM_MIN);
+	net_pkt_set_ieee802154_rssi_dbm(pkt, IEEE802154_MAC_RSSI_DBM_MAX);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), IEEE802154_MAC_RSSI_MAX);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), IEEE802154_MAC_RSSI_DBM_MAX);
+	net_pkt_set_ieee802154_rssi_dbm(pkt, 0);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), 174U);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), 0);
+
+	/* Test setting/getting of signed RSSI (outside range). */
+	net_pkt_set_ieee802154_rssi_dbm(pkt, INT16_MIN + 1);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), IEEE802154_MAC_RSSI_MIN);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), IEEE802154_MAC_RSSI_DBM_MIN);
+	net_pkt_set_ieee802154_rssi_dbm(pkt, INT16_MAX);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), IEEE802154_MAC_RSSI_MAX);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), IEEE802154_MAC_RSSI_DBM_MAX);
+
+	/* Test setting/getting of signed RSSI (special value - "no RSSI available"). */
+	net_pkt_set_ieee802154_rssi_dbm(pkt, IEEE802154_MAC_RSSI_DBM_UNDEFINED);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), IEEE802154_MAC_RSSI_UNDEFINED);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), IEEE802154_MAC_RSSI_DBM_UNDEFINED);
+
+	/* Demonstrate setting/getting of signed RSSI represented as a raw
+	 * two-complements value in uint8_t (explicit cast required).
+	 */
+	raw_signed_rssi_dbm = (uint8_t)-2;
+	net_pkt_set_ieee802154_rssi_dbm(pkt, (int8_t) raw_signed_rssi_dbm);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), 172U);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), -2);
+
+	/* Demonstrate setting/getting of signed RSSI represented as int8_t
+	 * (no explicit cast required)
+	 */
+	signed_rssi_dbm = -2;
+	net_pkt_set_ieee802154_rssi_dbm(pkt, signed_rssi_dbm);
+	zassert_equal(net_pkt_ieee802154_rssi(pkt), 172U);
+	zassert_equal(net_pkt_ieee802154_rssi_dbm(pkt), -2);
+
+	net_pkt_unref(pkt);
+	return true;
+}
+
 #ifdef CONFIG_NET_SOCKETS
 static bool test_dgram_packet_sending(void *dst_sll, uint8_t dst_sll_halen, uint32_t security_level)
 {
 	/* tests should be run sequentially, so no need for context locking */
-	struct ieee802154_context *ctx = net_if_l2_data(iface);
-	struct sockaddr_ll socket_sll = {.sll_ifindex = net_if_get_by_iface(iface),
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
+	struct sockaddr_ll socket_sll = {.sll_ifindex = net_if_get_by_iface(net_iface),
 					 .sll_family = AF_PACKET,
 					 .sll_protocol = ETH_P_IEEE802154};
 	struct sockaddr_ll pkt_dst_sll = {
@@ -556,10 +696,10 @@ static bool test_dgram_packet_sending(void *dst_sll, uint8_t dst_sll_halen, uint
 		goto out;
 	}
 
-	NET_INFO("- Sending DGRAM packet via AF_PACKET socket\n");
+	NET_INFO("- Sending DGRAM packet via AF_PACKET socket");
 	fd = socket(AF_PACKET, SOCK_DGRAM, ETH_P_IEEE802154);
 	if (fd < 0) {
-		NET_ERR("*** Failed to create DGRAM socket : %d\n", errno);
+		NET_ERR("*** Failed to create DGRAM socket : %d", errno);
 		goto reset_security;
 	}
 
@@ -571,20 +711,18 @@ static bool test_dgram_packet_sending(void *dst_sll, uint8_t dst_sll_halen, uint
 	bool bind_short_address = pkt_dst_sll.sll_halen == IEEE802154_SHORT_ADDR_LENGTH &&
 				  security_level == IEEE802154_SECURITY_LEVEL_NONE;
 
-	if (bind_short_address) {
-		if (set_up_short_addr(iface, ctx)) {
-			goto release_fd;
-		}
+	if (bind_short_address && set_up_short_addr(net_iface, ctx)) {
+		goto release_fd;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&socket_sll, sizeof(struct sockaddr_ll))) {
-		NET_ERR("*** Failed to bind packet socket : %d\n", errno);
+		NET_ERR("*** Failed to bind packet socket : %d", errno);
 		goto release_fd;
 	}
 
 	if (sendto(fd, payload, sizeof(payload), 0, (const struct sockaddr *)&pkt_dst_sll,
 		   sizeof(struct sockaddr_ll)) != sizeof(payload)) {
-		NET_ERR("*** Failed to send, errno %d\n", errno);
+		NET_ERR("*** Failed to send, errno %d", errno);
 		goto release_fd;
 	}
 
@@ -592,7 +730,7 @@ static bool test_dgram_packet_sending(void *dst_sll, uint8_t dst_sll_halen, uint
 	k_sem_take(&driver_lock, K_SECONDS(1));
 
 	if (!current_pkt->frags) {
-		NET_ERR("*** Could not send DGRAM packet\n");
+		NET_ERR("*** Could not send DGRAM packet");
 		goto release_fd;
 	}
 
@@ -600,20 +738,20 @@ static bool test_dgram_packet_sending(void *dst_sll, uint8_t dst_sll_halen, uint
 
 	if (!ieee802154_validate_frame(net_pkt_data(current_pkt),
 				       net_pkt_get_len(current_pkt), &mpdu)) {
-		NET_ERR("*** Sent packet is not valid\n");
+		NET_ERR("*** Sent packet is not valid");
 		goto release_frag;
 	}
 
-	net_pkt_lladdr_src(current_pkt)->addr = net_if_get_link_addr(iface)->addr;
-	net_pkt_lladdr_src(current_pkt)->len = net_if_get_link_addr(iface)->len;
+	net_pkt_lladdr_src(current_pkt)->addr = net_if_get_link_addr(net_iface)->addr;
+	net_pkt_lladdr_src(current_pkt)->len = net_if_get_link_addr(net_iface)->len;
 
-	if (!ieee802154_decipher_data_frame(iface, current_pkt, &mpdu)) {
-		NET_ERR("*** Cannot decipher/authenticate packet\n");
+	if (!ieee802154_decipher_data_frame(net_iface, current_pkt, &mpdu)) {
+		NET_ERR("*** Cannot decipher/authenticate packet");
 		goto release_frag;
 	}
 
 	if (memcmp(mpdu.payload, payload, sizeof(payload)) != 0) {
-		NET_ERR("*** Payload of sent packet is incorrect\n");
+		NET_ERR("*** Payload of sent packet is incorrect");
 		goto release_frag;
 	}
 
@@ -623,7 +761,7 @@ release_frag:
 	net_pkt_frag_unref(current_pkt->frags);
 	current_pkt->frags = NULL;
 release_fd:
-	tear_down_short_addr(iface, ctx);
+	tear_down_short_addr(net_iface, ctx);
 	close(fd);
 reset_security:
 	tear_down_security();
@@ -635,7 +773,7 @@ out:
 static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_len,
 					uint32_t security_level, bool is_broadcast)
 {
-	struct ieee802154_context *ctx = net_if_l2_data(iface);
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
 	uint8_t our_ext_addr[IEEE802154_EXT_ADDR_LENGTH]; /* big endian */
 	uint8_t payload[] = {0x01, 0x02, 0x03, 0x04};
 	uint16_t our_short_addr = ctx->short_addr; /* CPU byte order */
@@ -658,7 +796,7 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 		goto out;
 	}
 
-	NET_INFO("- Receiving DGRAM packet via AF_PACKET socket\n");
+	NET_INFO("- Receiving DGRAM packet via AF_PACKET socket");
 
 	fd = set_up_recv_socket(SOCK_DGRAM);
 	if (fd < 0) {
@@ -667,7 +805,7 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 
 	pkt = net_pkt_rx_alloc(K_FOREVER);
 	if (!pkt) {
-		NET_ERR("*** Failed to allocate net pkt.\n");
+		NET_ERR("*** Failed to allocate net pkt.");
 		goto release_fd;
 	}
 
@@ -679,19 +817,20 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 	    src_ll_addr_len == IEEE802154_EXT_ADDR_LENGTH) {
 		pkt->lladdr_src.addr = src_ll_addr;
 	} else {
-		NET_ERR("*** Illegal L2 source address length.\n");
+		NET_ERR("*** Illegal L2 source address length.");
 		goto release_pkt;
 	}
 	pkt->lladdr_src.len = src_ll_addr_len;
 
 	frame_buf = net_pkt_get_frag(pkt, IEEE802154_MTU, K_FOREVER);
 	if (!frame_buf) {
-		NET_ERR("*** Failed to allocate net pkt frag.\n");
+		NET_ERR("*** Failed to allocate net pkt frag.");
 		goto release_pkt;
 	}
 
 	ieee802154_compute_header_and_authtag_len(
-		iface, net_pkt_lladdr_dst(pkt), net_pkt_lladdr_src(pkt), &ll_hdr_len, &authtag_len);
+		net_iface, net_pkt_lladdr_dst(pkt), net_pkt_lladdr_src(pkt),
+		&ll_hdr_len, &authtag_len);
 
 	net_buf_add(frame_buf, ll_hdr_len);
 	net_buf_add_mem(frame_buf, payload, sizeof(payload));
@@ -705,7 +844,7 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 	} else if (src_ll_addr_len == IEEE802154_EXT_ADDR_LENGTH) {
 		sys_memcpy_swap(ctx->ext_addr, src_ll_addr, sizeof(ctx->ext_addr));
 	} else {
-		NET_ERR("*** Illegal L2 source address length.\n");
+		NET_ERR("*** Illegal L2 source address length.");
 		goto release_pkt;
 	}
 
@@ -719,19 +858,19 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 	}
 
 	if (!frame_result) {
-		NET_ERR("*** Error while creating data frame.\n");
+		NET_ERR("*** Error while creating data frame.");
 		goto release_pkt;
 	};
 
 	net_pkt_frag_add(pkt, frame_buf);
 
-	if (net_recv_data(iface, pkt)) {
-		NET_ERR("*** Error while processing packet.\n");
+	if (net_recv_data(net_iface, pkt)) {
+		NET_ERR("*** Error while processing packet.");
 		goto release_pkt;
 	}
 
 	if (current_pkt->frags) {
-		NET_ERR("*** Generated unexpected (ACK?) packet when processing packet.\n");
+		NET_ERR("*** Generated unexpected (ACK?) packet when processing packet.");
 		net_pkt_frag_unref(current_pkt->frags);
 		current_pkt->frags = NULL;
 		goto release_pkt;
@@ -741,23 +880,23 @@ static bool test_dgram_packet_reception(void *src_ll_addr, uint8_t src_ll_addr_l
 	received_len = recvfrom(fd, received_payload, sizeof(received_payload), 0,
 				(struct sockaddr *)&recv_src_sll, &recv_src_sll_len);
 	if (received_len < 0) {
-		NET_ERR("*** Failed to receive packet, errno %d\n", errno);
+		NET_ERR("*** Failed to receive packet, errno %d", errno);
 		goto release_pkt;
 	}
 
 	pkt_hexdump(received_payload, received_len);
 
 	if (received_len != sizeof(payload) || memcmp(received_payload, payload, sizeof(payload))) {
-		NET_ERR("*** Payload of received packet is incorrect\n");
+		NET_ERR("*** Payload of received packet is incorrect");
 		goto release_pkt;
 	}
 
 	if (recv_src_sll_len != sizeof(struct sockaddr_ll) ||
 	    recv_src_sll.sll_family != AF_PACKET || recv_src_sll.sll_protocol != ETH_P_IEEE802154 ||
-	    recv_src_sll.sll_ifindex != net_if_get_by_iface(iface) ||
+	    recv_src_sll.sll_ifindex != net_if_get_by_iface(net_iface) ||
 	    recv_src_sll.sll_halen != src_ll_addr_len ||
 	    memcmp(recv_src_sll.sll_addr, src_ll_addr, src_ll_addr_len)) {
-		NET_ERR("*** Source L2 address of received packet is incorrect\n");
+		NET_ERR("*** Source L2 address of received packet is incorrect");
 		goto release_pkt;
 	}
 
@@ -783,20 +922,20 @@ static bool test_raw_packet_sending(void)
 	bool result = false;
 	int fd;
 
-	NET_INFO("- Sending RAW packet via AF_PACKET socket\n");
+	NET_INFO("- Sending RAW packet via AF_PACKET socket");
 
 	fd = socket(AF_PACKET, SOCK_RAW, ETH_P_IEEE802154);
 	if (fd < 0) {
-		NET_ERR("*** Failed to create RAW socket : %d\n", errno);
+		NET_ERR("*** Failed to create RAW socket : %d", errno);
 		goto out;
 	}
 
-	socket_sll.sll_ifindex = net_if_get_by_iface(iface);
+	socket_sll.sll_ifindex = net_if_get_by_iface(net_iface);
 	socket_sll.sll_family = AF_PACKET;
 	socket_sll.sll_protocol = ETH_P_IEEE802154;
 
 	if (bind(fd, (const struct sockaddr *)&socket_sll, sizeof(struct sockaddr_ll))) {
-		NET_ERR("*** Failed to bind packet socket : %d\n", errno);
+		NET_ERR("*** Failed to bind packet socket : %d", errno);
 		goto release_fd;
 	}
 
@@ -806,7 +945,7 @@ static bool test_raw_packet_sending(void)
 	msg.msg_iovlen = 1;
 
 	if (sendmsg(fd, &msg, 0) != sizeof(raw_payload)) {
-		NET_ERR("*** Failed to send, errno %d\n", errno);
+		NET_ERR("*** Failed to send, errno %d", errno);
 		goto release_fd;
 	}
 
@@ -814,7 +953,7 @@ static bool test_raw_packet_sending(void)
 	k_sem_take(&driver_lock, K_SECONDS(1));
 
 	if (!current_pkt->frags) {
-		NET_ERR("*** Could not send RAW packet\n");
+		NET_ERR("*** Could not send RAW packet");
 		goto release_fd;
 	}
 
@@ -822,13 +961,13 @@ static bool test_raw_packet_sending(void)
 
 	if (!ieee802154_validate_frame(net_pkt_data(current_pkt),
 				       net_pkt_get_len(current_pkt), &mpdu)) {
-		NET_ERR("*** Sent packet is not valid\n");
+		NET_ERR("*** Sent packet is not valid");
 		goto release_frag;
 	}
 
 	if (memcmp(mpdu.payload, &raw_payload[RAW_MAC_PAYLOAD_START_INDEX],
 		   RAW_MAC_PAYLOAD_LENGTH) != 0) {
-		NET_ERR("*** Payload of sent packet is incorrect\n");
+		NET_ERR("*** Payload of sent packet is incorrect");
 		goto release_frag;
 	}
 
@@ -854,7 +993,7 @@ static bool test_raw_packet_reception(void)
 
 	result = false;
 
-	NET_INFO("- Receiving RAW packet via AF_PACKET socket\n");
+	NET_INFO("- Receiving RAW packet via AF_PACKET socket");
 
 	fd = set_up_recv_socket(SOCK_RAW);
 	if (fd < 0) {
@@ -863,26 +1002,26 @@ static bool test_raw_packet_reception(void)
 
 	pkt = net_pkt_rx_alloc(K_FOREVER);
 	if (!pkt) {
-		NET_ERR("*** Failed to allocate net pkt.\n");
+		NET_ERR("*** Failed to allocate net pkt.");
 		goto release_fd;
 	}
 
 	frame_buf = net_pkt_get_frag(pkt, sizeof(raw_payload), K_FOREVER);
 	if (!frame_buf) {
-		NET_ERR("*** Failed to allocate net pkt frag.\n");
+		NET_ERR("*** Failed to allocate net pkt frag.");
 		goto release_pkt;
 	}
 
 	net_buf_add_mem(frame_buf, raw_payload, sizeof(raw_payload));
 	net_pkt_frag_add(pkt, frame_buf);
 
-	if (net_recv_data(iface, pkt)) {
-		NET_ERR("*** Error while processing packet.\n");
+	if (net_recv_data(net_iface, pkt)) {
+		NET_ERR("*** Error while processing packet.");
 		goto release_pkt;
 	}
 
 	if (current_pkt->frags) {
-		NET_ERR("*** Generated unexpected packet when processing packet.\n");
+		NET_ERR("*** Generated unexpected packet when processing packet.");
 		net_pkt_frag_unref(current_pkt->frags);
 		current_pkt->frags = NULL;
 		goto release_pkt;
@@ -894,7 +1033,7 @@ static bool test_raw_packet_reception(void)
 	 */
 	received_len = recv(fd, received_payload, sizeof(received_payload), 0);
 	if (received_len < 0) {
-		NET_ERR("*** Failed to receive packet, errno %d\n", errno);
+		NET_ERR("*** Failed to receive packet, errno %d", errno);
 		goto release_pkt;
 	}
 
@@ -910,7 +1049,7 @@ static bool test_raw_packet_reception(void)
 	 */
 	if (received_len != sizeof(raw_payload) ||
 	    memcmp(received_payload, raw_payload, sizeof(raw_payload))) {
-		NET_ERR("*** Payload of received packet is incorrect\n");
+		NET_ERR("*** Payload of received packet is incorrect");
 		goto release_pkt;
 	}
 
@@ -947,10 +1086,10 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 		0xe5, 0xac, 0xa1, 0x1c, 0x00, 0x4b, 0x12, 0x00, /* LL address */
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,		/* Padding */
 	};
-	struct ieee802154_context *ctx = net_if_l2_data(iface);
+	struct ieee802154_context *ctx = net_if_l2_data(net_iface);
 	struct sockaddr_ll recv_src_sll = {0};
 	struct sockaddr_ll socket_sll = {
-		.sll_ifindex = net_if_get_by_iface(iface),
+		.sll_ifindex = net_if_get_by_iface(net_iface),
 		.sll_family = AF_PACKET,
 		.sll_protocol = ETH_P_IEEE802154,
 	};
@@ -967,30 +1106,34 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 	int received_len;
 	int fd;
 
-	NET_INFO("- Sending ACK reply to a data packet\n");
+	NET_INFO("- Sending ACK reply to a data packet");
 
 	fd = socket(AF_PACKET, SOCK_DGRAM, ETH_P_IEEE802154);
 	if (fd < 0) {
-		NET_ERR("*** Failed to create DGRAM socket : %d\n", errno);
+		NET_ERR("*** Failed to create DGRAM socket : %d", errno);
 		goto out;
 	}
 
 	if (bind(fd, (const struct sockaddr *)&socket_sll, sizeof(struct sockaddr_ll))) {
-		NET_ERR("*** Failed to bind packet socket : %d\n", errno);
+		NET_ERR("*** Failed to bind packet socket : %d", errno);
 		goto release_fd;
 	}
 
 	if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeo_optval, sizeof(timeo_optval))) {
-		NET_ERR("*** Failed to set reception timeout on packet socket : %d\n", errno);
+		NET_ERR("*** Failed to set reception timeout on packet socket : %d", errno);
+		goto release_fd;
+	}
+
+	if (set_up_short_addr(net_iface, ctx)) {
 		goto release_fd;
 	}
 
 	rx_pkt = get_data_pkt_with_ar();
 	if (!rx_pkt) {
-		goto release_fd;
+		goto reset_short_addr;
 	}
 
-	if (net_recv_data(iface, rx_pkt) < 0) {
+	if (net_recv_data(net_iface, rx_pkt) < 0) {
 		NET_ERR("Recv data failed");
 		goto release_rx_pkt;
 	}
@@ -999,17 +1142,17 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 	received_len = recvfrom(fd, received_payload, sizeof(received_payload), 0,
 				(struct sockaddr *)&recv_src_sll, &recv_src_sll_len);
 	if (received_len < 0) {
-		NET_ERR("*** Failed to receive packet, errno %d\n", errno);
+		NET_ERR("*** Failed to receive packet, errno %d", errno);
 		goto release_rx_pkt;
 	}
 
 	sys_memcpy_swap(mac_be, ctx->ext_addr, IEEE802154_EXT_ADDR_LENGTH);
 	if (recv_src_sll_len != sizeof(struct sockaddr_ll) ||
-	    recv_src_sll.sll_ifindex != net_if_get_by_iface(iface) ||
+	    recv_src_sll.sll_ifindex != net_if_get_by_iface(net_iface) ||
 	    recv_src_sll.sll_family != AF_PACKET || recv_src_sll.sll_protocol != ETH_P_IEEE802154 ||
 	    recv_src_sll.sll_halen != IEEE802154_EXT_ADDR_LENGTH ||
 	    memcmp(recv_src_sll.sll_addr, mac_be, IEEE802154_EXT_ADDR_LENGTH)) {
-		NET_ERR("*** Received socket address does not compare\n", errno);
+		NET_ERR("*** Received socket address does not compare", errno);
 		goto release_rx_pkt;
 	}
 
@@ -1017,7 +1160,7 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 
 	if (memcmp(expected_rx_pkt, received_payload,
 		   sizeof(expected_rx_pkt))) {
-		NET_ERR("*** Received uncompressed IPv6 payload does not compare\n");
+		NET_ERR("*** Received uncompressed IPv6 payload does not compare");
 		goto release_rx_pkt;
 	}
 
@@ -1026,7 +1169,7 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 
 	/* an ACK packet should be in current_pkt */
 	if (!current_pkt->frags) {
-		NET_ERR("*** No ACK reply sent\n");
+		NET_ERR("*** No ACK reply sent");
 		goto release_rx_pkt;
 	}
 
@@ -1034,18 +1177,18 @@ static bool test_recv_and_send_ack_reply(struct ieee802154_pkt_test *t)
 
 	if (!ieee802154_validate_frame(net_pkt_data(current_pkt),
 				       net_pkt_get_len(current_pkt), &mpdu)) {
-		NET_ERR("*** ACK Reply is invalid\n");
+		NET_ERR("*** ACK Reply is invalid");
 		goto release_tx_frag;
 	}
 
 	if (memcmp(mpdu.mhr.fs, t->mhr_check.fc_seq,
 		   sizeof(struct ieee802154_fcf_seq))) {
-		NET_ERR("*** ACK Reply does not compare\n");
+		NET_ERR("*** ACK Reply does not compare");
 		goto release_tx_frag;
 	}
 
 	if (mpdu.mhr.fs->sequence != t->sequence) {
-		NET_ERR("*** Sequence number invalid\n");
+		NET_ERR("*** Sequence number invalid");
 		goto release_tx_frag;
 	}
 
@@ -1056,6 +1199,8 @@ release_tx_frag:
 	current_pkt->frags = NULL;
 release_rx_pkt:
 	net_pkt_unref(rx_pkt);
+reset_short_addr:
+	tear_down_short_addr(net_iface, ctx);
 release_fd:
 	close(fd);
 out:
@@ -1065,31 +1210,38 @@ out:
 
 static bool initialize_test_environment(void)
 {
+	uint16_t mock_pan_id = MOCK_PAN_ID;
 	const struct device *dev;
 
 	k_sem_reset(&driver_lock);
 
 	current_pkt = net_pkt_rx_alloc(K_FOREVER);
 	if (!current_pkt) {
-		NET_ERR("*** No buffer to allocate\n");
+		NET_ERR("*** No buffer to allocate");
 		return false;
 	}
 
 	dev = device_get_binding("fake_ieee802154");
 	if (!dev) {
-		NET_ERR("*** Could not get fake device\n");
+		NET_ERR("*** Could not get fake device");
 		goto release_pkt;
 	}
 
-	iface = net_if_lookup_by_dev(dev);
-	if (!iface) {
-		NET_ERR("*** Could not get fake iface\n");
+	net_iface = net_if_lookup_by_dev(dev);
+	if (!net_iface) {
+		NET_ERR("*** Could not get fake iface");
 		goto release_pkt;
 	}
 
-	NET_INFO("Fake IEEE 802.15.4 network interface ready\n");
+	if (net_mgmt(NET_REQUEST_IEEE802154_SET_PAN_ID, net_iface,
+		     &mock_pan_id, sizeof(mock_pan_id))) {
+		NET_ERR("*** Failed to set PAN ID in %s.", __func__);
+		goto release_pkt;
+	}
 
-	ieee_addr_hexdump(net_if_get_link_addr(iface)->addr, 8);
+	NET_INFO("Fake IEEE 802.15.4 network interface ready");
+
+	ieee_addr_hexdump(net_if_get_link_addr(net_iface)->addr, 8);
 
 	return true;
 
@@ -1187,6 +1339,16 @@ ZTEST(ieee802154_l2, test_clone_cb)
 	ret = test_packet_cloning_with_cb();
 
 	zassert_true(ret, "IEEE 802.15.4 net_pkt control block correctly cloned.");
+}
+
+ZTEST(ieee802154_l2, test_convert_rssi)
+{
+	bool ret;
+
+	ret = test_packet_rssi_conversion();
+
+	zassert_true(ret, "IEEE 802.15.4 net_pkt RSSI value correctly converted between dBm and "
+			  "normalized value.");
 }
 
 ZTEST_SUITE(ieee802154_l2, NULL, test_setup, NULL, NULL, test_teardown);

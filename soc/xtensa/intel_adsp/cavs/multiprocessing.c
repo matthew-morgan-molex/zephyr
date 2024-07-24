@@ -5,8 +5,9 @@
 #include <cavs-idc.h>
 #include <adsp_memory.h>
 #include <adsp_shim.h>
-#include <soc.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/cache.h>
 
 /* IDC power up message to the ROM firmware.  This isn't documented
  * anywhere, it's basically just a magic number (except the high bit,
@@ -61,7 +62,8 @@ void soc_start_core(int cpu_num)
 	 * such that the standard system bootstrap out of IMR can
 	 * place it there.  But this is fine for now.
 	 */
-	void **lpsram = z_soc_uncached_ptr((__sparse_force void __sparse_cache *)LP_SRAM_BASE);
+	void **lpsram = sys_cache_uncached_ptr_get(
+			(__sparse_force void __sparse_cache *)LP_SRAM_BASE);
 	uint8_t tramp[] = {
 		0x06, 0x01, 0x00, /* J <PC+8>  (jump to L32R) */
 		0,                /* (padding to align entry_addr) */
@@ -71,7 +73,22 @@ void soc_start_core(int cpu_num)
 	};
 
 	memcpy(lpsram, tramp, ARRAY_SIZE(tramp));
+#if CONFIG_PM
+	extern void dsp_restore_vector(void);
+
+	/* We need to find out what type of booting is taking place here. Secondary cores
+	 * can be disabled and enabled multiple times during runtime. During kernel
+	 * initialization, the next pm state is set to ACTIVE. This way we can determine
+	 * whether the core is being turned on again or for the first time.
+	 */
+	if (pm_state_next_get(cpu_num)->state == PM_STATE_ACTIVE)
+		lpsram[1] = z_soc_mp_asm_entry;
+	else
+		lpsram[1] = dsp_restore_vector;
+#else
 	lpsram[1] = z_soc_mp_asm_entry;
+#endif
+
 
 	/* Disable automatic power and clock gating for that CPU, so
 	 * it won't just go back to sleep.  Note that after startup,
@@ -98,7 +115,7 @@ void soc_start_core(int cpu_num)
 	 * available, so it's sent shifted).  The write to ITC
 	 * triggers the interrupt, so that comes last.
 	 */
-	uint32_t ietc = ((long) z_soc_mp_asm_entry) >> 2;
+	uint32_t ietc = ((long)lpsram[1]) >> 2;
 
 	IDC[curr_cpu].core[cpu_num].ietc = ietc;
 	IDC[curr_cpu].core[cpu_num].itc = IDC_MSG_POWER_UP;
@@ -170,9 +187,13 @@ __imr void soc_mp_init(void)
 
 int soc_adsp_halt_cpu(int id)
 {
+	unsigned int irq_mask;
+
 	if (id == 0 || id == arch_curr_cpu()->id) {
 		return -EINVAL;
 	}
+
+	irq_mask = CAVS_L2_IDC;
 
 #ifdef CONFIG_INTEL_ADSP_TIMER
 	/*
@@ -180,8 +201,10 @@ int soc_adsp_halt_cpu(int id)
 	 * by itself once WFI (wait for interrupt) instruction
 	 * runs.
 	 */
-	CAVS_INTCTRL[id].l2.set = CAVS_L2_DWCT0;
+	irq_mask |= CAVS_L2_DWCT0;
 #endif
+
+	CAVS_INTCTRL[id].l2.set = irq_mask;
 
 	/* Stop sending IPIs to this core */
 	soc_cpus_active[id] = false;

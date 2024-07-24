@@ -42,6 +42,10 @@
 
 };
 
+&clk_lsi {
+	status = "okay";
+};
+
 &clk_hse {
 	clock-frequency = <DT_FREQ_M(24)>;
 	status = "okay";
@@ -175,6 +179,14 @@ zephyr_udc0: &usbotg_fs {
 	pinctrl-0 = <&adc1_in10_pc0 &adc1_in11_pc1
 		     &adc1_in12_pc2 &adc1_in13_pc3>;
 	pinctrl-names = "default";
+	st,adc-clock-source = <SYNC>;
+	st,adc-prescaler = <2>;
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x10000000>,
+		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
 	status = "okay";
 };
 

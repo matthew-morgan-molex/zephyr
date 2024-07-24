@@ -4,6 +4,10 @@
 # SPDX -License-Identifier: Apache-2.0
 #
 
+zephyr_syscall_header(
+  ${ZEPHYR_BASE}/include/zephyr/mgmt/updatehub.h
+)
+
 zephyr_library()
 
 zephyr_library_sources_ifdef(CONFIG_UPDATEHUB updatehub.c)
@@ -19,3 +23,5 @@ zephyr_library_sources_ifdef(CONFIG_USERSPACE updatehub_handlers.c)
 zephyr_include_directories(
   ${ZEPHYR_BASE}/subsys/mgmt/updatehub/include
 )
+
+zephyr_library_link_libraries_ifdef(CONFIG_MBEDTLS mbedTLS)

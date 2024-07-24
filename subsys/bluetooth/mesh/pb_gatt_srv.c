@@ -17,7 +17,6 @@
 #include "common/bt_str.h"
 
 #include "mesh.h"
-#include "adv.h"
 #include "net.h"
 #include "rpl.h"
 #include "transport.h"
@@ -94,27 +93,29 @@ static ssize_t gatt_recv(struct bt_conn *conn,
 	return bt_mesh_proxy_msg_recv(conn, buf, len);
 }
 
-static void gatt_connected(struct bt_conn *conn, uint8_t err)
+static void gatt_connected(struct bt_conn *conn, uint8_t conn_err)
 {
 	struct bt_conn_info info;
+	int err;
 
-	bt_conn_get_info(conn, &info);
-	if (info.role != BT_CONN_ROLE_PERIPHERAL || !service_registered ||
+	err = bt_conn_get_info(conn, &info);
+	if (err || info.role != BT_CONN_ROLE_PERIPHERAL || !service_registered ||
 	    bt_mesh_is_provisioned() || info.id != BT_ID_DEFAULT || cli)  {
 		return;
 	}
 
 	cli = bt_mesh_proxy_role_setup(conn, gatt_send, proxy_msg_recv);
 
-	LOG_DBG("conn %p err 0x%02x", (void *)conn, err);
+	LOG_DBG("conn %p err 0x%02x", (void *)conn, conn_err);
 }
 
 static void gatt_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	struct bt_conn_info info;
+	int err;
 
-	bt_conn_get_info(conn, &info);
-	if (info.role != BT_CONN_ROLE_PERIPHERAL || !service_registered ||
+	err = bt_conn_get_info(conn, &info);
+	if (err || info.role != BT_CONN_ROLE_PERIPHERAL || !service_registered ||
 	    info.id != BT_ID_DEFAULT || !cli || cli->conn != conn) {
 		return;
 	}
@@ -274,6 +275,7 @@ int bt_mesh_pb_gatt_srv_adv_start(void)
 	}
 
 	struct bt_le_adv_param fast_adv_param = {
+		.id = BT_ID_DEFAULT,
 		.options = ADV_OPT_PROV,
 		ADV_FAST_INT,
 	};
@@ -286,6 +288,7 @@ int bt_mesh_pb_gatt_srv_adv_start(void)
 
 	if (elapsed_time > FAST_ADV_TIME) {
 		struct bt_le_adv_param slow_adv_param = {
+			.id = BT_ID_DEFAULT,
 			.options = ADV_OPT_PROV,
 			ADV_SLOW_INT,
 		};

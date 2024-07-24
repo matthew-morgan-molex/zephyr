@@ -9,6 +9,7 @@
 #include <nxp/nxp_rt1060.dtsi>
 #include "mimxrt1060_evk-pinctrl.dtsi"
 #include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "NXP MIMXRT1060-EVK board";
@@ -18,7 +19,6 @@
 		led0 = &green_led;
 		pwm-led0 = &green_pwm_led;
 		sw0 = &user_button;
-		kscan0 = &kscan_input;
 		watchdog0 = &wdog0;
 		sdhc0 = &usdhc1;
 	};
@@ -34,7 +34,6 @@
 		zephyr,shell-uart = &lpuart1;
 		zephyr,canbus = &flexcan3;
 		zephyr,display = &lcdif;
-		zephyr,keyboard-scan = &kscan_input;
 	};
 
 	sdram0: memory@80000000 {
@@ -63,7 +62,13 @@
 		user_button: button-1 {
 			label = "User SW8";
 			gpios = <&gpio5 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_0>;
 		};
+	};
+
+	lvgl_pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		input = <&ft5336>;
 	};
 
 	arduino_header: connector {
@@ -138,21 +143,20 @@ arduino_serial: &lpuart3 {
 				label = "mcuboot";
 				reg = <0x00000000 DT_SIZE_K(64)>;
 			};
+			/* Note slot 0 has one additional sector,
+			 * this is intended for use with the swap move algorithm
+			 */
 			slot0_partition: partition@10000 {
 				label = "image-0";
-				reg = <0x00010000 DT_SIZE_M(3)>;
+				reg = <0x00010000 (DT_SIZE_M(3) + DT_SIZE_K(4))>;
 			};
-			slot1_partition: partition@310000 {
+			slot1_partition: partition@311000 {
 				label = "image-1";
-				reg = <0x00310000 DT_SIZE_M(3)>;
+				reg = <0x00311000 DT_SIZE_M(3)>;
 			};
-			scratch_partition: partition@610000 {
-				label = "image-scratch";
-				reg = <0x00610000 DT_SIZE_K(128)>;
-			};
-			storage_partition: partition@630000 {
+			storage_partition: partition@611000 {
 				label = "storage";
-				reg = <0x00630000 DT_SIZE_K(1856)>;
+				reg = <0x00611000 DT_SIZE_K(1980)>;
 			};
 		};
 	};
@@ -193,14 +197,10 @@ arduino_i2c: &lpi2c1 {
 	pinctrl-0 = <&pinmux_lpi2c1>;
 	pinctrl-names = "default";
 
-	ft5336@38 {
+	ft5336: ft5336@38 {
 		compatible = "focaltech,ft5336";
 		reg = <0x38>;
 		int-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
-
-		kscan_input: kscan-input {
-			compatible = "zephyr,kscan-input";
-		};
 	};
 };
 
@@ -237,7 +237,17 @@ zephyr_udc0: &usb1 {
 
 &flexpwm2_pwm3 {
 	status = "okay";
-	pinctrl-0 = <&pinmux_flexpwm2>;
+	pinctrl-0 = <&pinmux_flexpwm2_3>;
+	pinctrl-names = "default";
+};
+
+&flexpwm1_pwm0 {
+	pinctrl-0 = <&pinmux_flexpwm1_0>;
+	pinctrl-names = "default";
+};
+
+&flexpwm1_pwm3 {
+	pinctrl-0 = <&pinmux_flexpwm1>;
 	pinctrl-names = "default";
 };
 
@@ -322,4 +332,8 @@ arduino_spi: &lpspi1 {
 &itm {
 	pinctrl-0 = <&pinmux_swo>;
 	pinctrl-names = "default";
+};
+
+&pxp {
+	status = "okay";
 };

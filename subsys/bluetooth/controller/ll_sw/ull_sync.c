@@ -673,6 +673,7 @@ void ull_sync_setup(struct ll_scan_set *scan, struct ll_scan_aux_set *aux,
 	uint32_t interval_us;
 	struct pdu_adv *pdu;
 	uint16_t interval;
+	uint32_t slot_us;
 	uint8_t chm_last;
 	uint32_t ret;
 	uint8_t sca;
@@ -711,10 +712,10 @@ void ull_sync_setup(struct ll_scan_set *scan, struct ll_scan_aux_set *aux,
 	* CONFIG_BT_CTLR_SYNC_PERIODIC_ADI_SUPPORT
 	*/
 
-	memcpy(lll->access_addr, &si->aa, sizeof(lll->access_addr));
+	memcpy(lll->access_addr, si->aa, sizeof(lll->access_addr));
 	lll->data_chan_id = lll_chan_id(lll->access_addr);
 	memcpy(lll->crc_init, si->crc_init, sizeof(lll->crc_init));
-	lll->event_counter = si->evt_cntr;
+	lll->event_counter = sys_le16_to_cpu(si->evt_cntr);
 	lll->phy = aux->lll.phy;
 
 	interval = sys_le16_to_cpu(si->interval);
@@ -762,7 +763,7 @@ void ull_sync_setup(struct ll_scan_set *scan, struct ll_scan_aux_set *aux,
 				   lll_clock_ppm_get(sca)) *
 				  interval_us), USEC_PER_SEC);
 	lll->window_widening_max_us = (interval_us >> 1) - EVENT_IFS_US;
-	if (si->offs_units) {
+	if (PDU_ADV_SYNC_INFO_OFFS_UNITS_GET(si)) {
 		lll->window_size_event_us = OFFS_UNIT_300_US;
 	} else {
 		lll->window_size_event_us = OFFS_UNIT_30_US;
@@ -809,10 +810,10 @@ void ull_sync_setup(struct ll_scan_set *scan, struct ll_scan_aux_set *aux,
 	ready_delay_us = lll_radio_rx_ready_delay_get(lll->phy, 1);
 
 	sync_offset_us = ftr->radio_end_us;
-	sync_offset_us += (uint32_t)sys_le16_to_cpu(si->offs) *
+	sync_offset_us += PDU_ADV_SYNC_INFO_OFFSET_GET(si) *
 			  lll->window_size_event_us;
 	/* offs_adjust may be 1 only if sync setup by LL_PERIODIC_SYNC_IND */
-	sync_offset_us += (si->offs_adjust ? OFFS_ADJUST_US : 0U);
+	sync_offset_us += (PDU_ADV_SYNC_INFO_OFFS_ADJUST_GET(si) ? OFFS_ADJUST_US : 0U);
 	sync_offset_us -= PDU_AC_US(pdu->len, lll->phy, ftr->phy_flags);
 	sync_offset_us -= EVENT_TICKER_RES_MARGIN_US;
 	sync_offset_us -= EVENT_JITTER_US;
@@ -820,18 +821,22 @@ void ull_sync_setup(struct ll_scan_set *scan, struct ll_scan_aux_set *aux,
 
 	interval_us -= lll->window_widening_periodic_us;
 
+	/* Calculate event time reservation */
+	slot_us = PDU_AC_MAX_US(PDU_AC_EXT_PAYLOAD_RX_SIZE, lll->phy);
+	slot_us += ready_delay_us;
+
+	/* Add implementation defined radio event overheads */
+	if (IS_ENABLED(CONFIG_BT_CTLR_EVENT_OVERHEAD_RESERVE_MAX)) {
+		slot_us += EVENT_OVERHEAD_START_US + EVENT_OVERHEAD_END_US;
+	}
+
 	/* TODO: active_to_start feature port */
 	sync->ull.ticks_active_to_start = 0U;
 	sync->ull.ticks_prepare_to_start =
 		HAL_TICKER_US_TO_TICKS(EVENT_OVERHEAD_XTAL_US);
 	sync->ull.ticks_preempt_to_start =
 		HAL_TICKER_US_TO_TICKS(EVENT_OVERHEAD_PREEMPT_MIN_US);
-	sync->ull.ticks_slot =
-		HAL_TICKER_US_TO_TICKS(EVENT_OVERHEAD_START_US +
-				       ready_delay_us +
-				       PDU_AC_MAX_US(PDU_AC_EXT_PAYLOAD_RX_SIZE,
-						     lll->phy) +
-				       EVENT_OVERHEAD_END_US);
+	sync->ull.ticks_slot = HAL_TICKER_US_TO_TICKS_CEIL(slot_us);
 
 	ticks_slot_offset = MAX(sync->ull.ticks_active_to_start,
 				sync->ull.ticks_prepare_to_start);

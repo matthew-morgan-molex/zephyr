@@ -6,7 +6,6 @@
 #include <zephyr/kernel.h>
 #include "mesh_test.h"
 #include "mesh/net.h"
-#include "mesh/adv.h"
 #include "mesh/mesh.h"
 #include "mesh/foundation.h"
 
@@ -185,7 +184,7 @@ static void test_rx_invalid_packet(void)
 	}
 
 	/* Verify that test data is received correct. */
-	err = bt_mesh_test_recv(10, cfg->addr, K_SECONDS(10));
+	err = bt_mesh_test_recv(10, cfg->addr, NULL, K_SECONDS(10));
 	ASSERT_OK_MSG(err, "Failed receiving with valid ad_type");
 
 	PASS();

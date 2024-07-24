@@ -71,7 +71,7 @@ Nucleo H723ZG provides the following hardware components:
 - UART(4)
 - USB OTG Full Speed and High Speed(1)
 - USB OTG Full Speed(1)
-- CAN-FD(2)
+- CAN FD(2)
 - SAI(2)
 - SPDIF_Rx(4)
 - HDMI_CEC(1)
@@ -121,7 +121,7 @@ Other hardware features are not yet supported on this Zephyr port.
 The default configuration per core can be found in the defconfig files:
 ``boards/arm/nucleo_h723zg/nucleo_h723zg_defconfig``
 
-For mode details please refer to `STM32 Nucleo-144 board User Manual`_.
+For more details please refer to `STM32 Nucleo-144 board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------

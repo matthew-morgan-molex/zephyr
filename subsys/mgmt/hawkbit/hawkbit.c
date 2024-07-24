@@ -203,8 +203,8 @@ static const struct json_obj_descr json_dep_fbk_descr[] = {
 static bool start_http_client(void)
 {
 	int ret = -1;
-	struct addrinfo *addr;
-	struct addrinfo hints;
+	struct zsock_addrinfo *addr;
+	struct zsock_addrinfo hints;
 	int resolve_attempts = 10;
 
 #if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS)
@@ -224,7 +224,7 @@ static bool start_http_client(void)
 	}
 
 	while (resolve_attempts--) {
-		ret = getaddrinfo(CONFIG_HAWKBIT_SERVER, CONFIG_HAWKBIT_PORT, &hints, &addr);
+		ret = zsock_getaddrinfo(CONFIG_HAWKBIT_SERVER, CONFIG_HAWKBIT_PORT, &hints, &addr);
 		if (ret == 0) {
 			break;
 		}
@@ -237,7 +237,7 @@ static bool start_http_client(void)
 		return false;
 	}
 
-	hb_context.sock = socket(addr->ai_family, SOCK_STREAM, protocol);
+	hb_context.sock = zsock_socket(addr->ai_family, SOCK_STREAM, protocol);
 	if (hb_context.sock < 0) {
 		LOG_ERR("Failed to create TCP socket");
 		goto err;
@@ -260,24 +260,24 @@ static bool start_http_client(void)
 	}
 #endif
 
-	if (connect(hb_context.sock, addr->ai_addr, addr->ai_addrlen) < 0) {
+	if (zsock_connect(hb_context.sock, addr->ai_addr, addr->ai_addrlen) < 0) {
 		LOG_ERR("Failed to connect to server");
 		goto err_sock;
 	}
 
-	freeaddrinfo(addr);
+	zsock_freeaddrinfo(addr);
 	return true;
 
 err_sock:
-	close(hb_context.sock);
+	zsock_close(hb_context.sock);
 err:
-	freeaddrinfo(addr);
+	zsock_freeaddrinfo(addr);
 	return false;
 }
 
 static void cleanup_connection(void)
 {
-	if (close(hb_context.sock) < 0) {
+	if (zsock_close(hb_context.sock) < 0) {
 		LOG_ERR("Could not close the socket");
 	}
 }
@@ -677,6 +677,12 @@ static void response_cb(struct http_response *rsp, enum http_final_call final_da
 					hb_context.dl.http_content_size,
 					hb_context.dl.downloaded_size);
 				hb_context.code_status = HAWKBIT_METADATA_ERROR;
+				break;
+			}
+
+			if (rsp->http_status_code / 100 == 4) {
+				LOG_ERR("HTTP request denied: %d", rsp->http_status_code);
+				hb_context.code_status = HAWKBIT_PERMISSION_ERROR;
 				break;
 			}
 
@@ -1223,6 +1229,10 @@ static void autohandler(struct k_work *work)
 
 	case HAWKBIT_NETWORKING_ERROR:
 		LOG_INF("Network error");
+		break;
+
+	case HAWKBIT_PERMISSION_ERROR:
+		LOG_INF("Permission error");
 		break;
 
 	case HAWKBIT_METADATA_ERROR:

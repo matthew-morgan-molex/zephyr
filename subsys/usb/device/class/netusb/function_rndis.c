@@ -652,7 +652,7 @@ static int rndis_set_handle(uint8_t *data, uint32_t len)
 	/* Parameter starts at offset buf_offset of the req_id field ;) */
 	param = (uint8_t *)&cmd->req_id + sys_le32_to_cpu(cmd->buf_offset);
 
-	if (len - ((uint32_t)param - (uint32_t)cmd) !=
+	if (len - ((uintptr_t)param - (uintptr_t)cmd) !=
 	    sys_le32_to_cpu(cmd->buf_len)) {
 		LOG_ERR("Packet parsing error");
 		return -EINVAL;
@@ -883,8 +883,12 @@ static int rndis_class_handler(struct usb_setup_packet *setup, int32_t *len,
 	return -ENOTSUP;
 }
 
-static void cmd_thread(void)
+static void cmd_thread(void *p1, void *p2, void *p3)
 {
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
 	LOG_INF("Command thread started");
 
 	while (true) {
@@ -1051,7 +1055,7 @@ static int rndis_init(void)
 
 	k_thread_create(&cmd_thread_data, cmd_stack,
 			K_KERNEL_STACK_SIZEOF(cmd_stack),
-			(k_thread_entry_t)cmd_thread,
+			cmd_thread,
 			NULL, NULL, NULL, K_PRIO_COOP(8), 0, K_NO_WAIT);
 
 	k_thread_name_set(&cmd_thread_data, "usb_rndis");

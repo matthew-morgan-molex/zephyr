@@ -251,7 +251,7 @@ Connections and IOs
 STM32L562E-DK Discovery Board has 8 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `STM32L562E-DK Discovery board User Manual`_.
+For more details please refer to `STM32L562E-DK Discovery board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -340,7 +340,7 @@ can be generated using ``stm32l562e_dk_ns`` as build target.
 
    $ west build -b stm32l562e_dk_ns path/to/source/directory
 
-Note: When building the ``*_ns`` image with TF-M, ``build/tfm/postbuild.sh`` bash script
+Note: When building the ``*_ns`` image with TF-M, ``build/tfm/api_ns/postbuild.sh`` bash script
 is run automatically in a post-build step to make some required flash layout changes.
 
 Once the build is completed, run the following script to initialize the option bytes.
@@ -381,7 +381,7 @@ You can debug an application in the usual way.  Here is an example for the
    https://www.st.com/en/microcontrollers/stm32l562qe.html
 
 .. _STM32L562 reference manual:
-   http://www.st.com/resource/en/reference_manual/DM00346336.pdf
+   https://www.st.com/resource/en/reference_manual/DM00346336.pdf
 
 .. _STM32CubeProgrammer:
    https://www.st.com/en/development-tools/stm32cubeprog.html

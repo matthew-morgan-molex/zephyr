@@ -21,7 +21,7 @@
 
 #include "hci_core.h"
 #include "conn_internal.h"
-#include "l2cap_internal.h"
+#include "l2cap_br_internal.h"
 #include "avdtp_internal.h"
 #include "a2dp_internal.h"
 #include "rfcomm_internal.h"
@@ -30,7 +30,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_l2cap_br, CONFIG_BT_L2CAP_LOG_LEVEL);
 
-#define BR_CHAN_RTX(_w) CONTAINER_OF(_w, struct bt_l2cap_br_chan, rtx_work)
+#define BR_CHAN_RTX(_w) CONTAINER_OF(k_work_delayable_from_work(_w), \
+				     struct bt_l2cap_br_chan, rtx_work)
 
 #define L2CAP_BR_PSM_START	0x0001
 #define L2CAP_BR_PSM_END	0xffff
@@ -164,7 +165,9 @@ static void l2cap_br_chan_destroy(struct bt_l2cap_chan *chan)
 	 * In the case where we are in the context of executing the rtx_work
 	 * item, we don't sync as it will deadlock the workqueue.
 	 */
-	if (k_current_get() != &br_chan->rtx_work.queue->thread) {
+	struct k_work_q *rtx_work_queue = br_chan->rtx_work.queue;
+
+	if (rtx_work_queue == NULL || k_current_get() != &rtx_work_queue->thread) {
 		k_work_cancel_delayable_sync(&br_chan->rtx_work, &br_chan->rtx_sync);
 	} else {
 		k_work_cancel_delayable(&br_chan->rtx_work);
@@ -235,6 +238,20 @@ static uint8_t l2cap_br_get_ident(void)
 	return ident;
 }
 
+static int l2cap_br_send_cb(struct bt_conn *conn, uint16_t cid, struct net_buf *buf,
+			    bt_conn_tx_cb_t cb, void *user_data)
+{
+	struct bt_l2cap_hdr *hdr;
+
+	LOG_DBG("conn %p cid %u len %zu", conn, cid, buf->len);
+
+	hdr = net_buf_push(buf, sizeof(*hdr));
+	hdr->len = sys_cpu_to_le16(buf->len - sizeof(*hdr));
+	hdr->cid = sys_cpu_to_le16(cid);
+
+	return bt_conn_send_cb(conn, buf, cb, user_data);
+}
+
 /* Send the buffer and release it in case of failure.
  * Any other cleanup in failure to send should be handled by the disconnected
  * handler.
@@ -242,7 +259,7 @@ static uint8_t l2cap_br_get_ident(void)
 static inline void l2cap_send(struct bt_conn *conn, uint16_t cid,
 			      struct net_buf *buf)
 {
-	if (bt_l2cap_send(conn, cid, buf)) {
+	if (l2cap_br_send_cb(conn, cid, buf, NULL, NULL)) {
 		net_buf_unref(buf);
 	}
 }
@@ -251,7 +268,8 @@ static void l2cap_br_chan_send_req(struct bt_l2cap_br_chan *chan,
 				   struct net_buf *buf, k_timeout_t timeout)
 {
 
-	if (bt_l2cap_send(chan->chan.conn, BT_L2CAP_CID_BR_SIG, buf)) {
+	if (l2cap_br_send_cb(chan->chan.conn, BT_L2CAP_CID_BR_SIG, buf,
+			     NULL, NULL)) {
 		net_buf_unref(buf);
 		return;
 	}
@@ -746,7 +764,7 @@ static void l2cap_br_conn_req(struct bt_l2cap_br *l2cap, uint8_t ident,
 	 * channel. If no free channels available for PSM server reply with
 	 * proper result and quit since chan pointer is uninitialized then.
 	 */
-	if (server->accept(conn, &chan) < 0) {
+	if (server->accept(conn, server, &chan) < 0) {
 		result = BT_L2CAP_BR_ERR_NO_RESOURCES;
 		goto no_chan;
 	}
@@ -1361,7 +1379,7 @@ int bt_l2cap_br_chan_send_cb(struct bt_l2cap_chan *chan, struct net_buf *buf, bt
 		return -EMSGSIZE;
 	}
 
-	return bt_l2cap_send_cb(br_chan->chan.conn, br_chan->tx.cid, buf, cb, user_data);
+	return l2cap_br_send_cb(br_chan->chan.conn, br_chan->tx.cid, buf, cb, user_data);
 }
 
 int bt_l2cap_br_chan_send(struct bt_l2cap_chan *chan, struct net_buf *buf)
@@ -1371,7 +1389,7 @@ int bt_l2cap_br_chan_send(struct bt_l2cap_chan *chan, struct net_buf *buf)
 
 static int l2cap_br_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 {
-	struct bt_l2cap_br *l2cap = CONTAINER_OF(chan, struct bt_l2cap_br, chan);
+	struct bt_l2cap_br *l2cap = CONTAINER_OF(chan, struct bt_l2cap_br, chan.chan);
 	struct bt_l2cap_sig_hdr *hdr;
 	uint16_t len;
 

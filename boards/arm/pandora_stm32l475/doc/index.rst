@@ -1,7 +1,7 @@
 .. _stm32l475ve_pandora_board:
 
-ST STM32L475 Pandora
-####################
+Alientek STM32L475 Pandora
+##########################
 
 Overview
 ********
@@ -136,7 +136,7 @@ Connections and IOs
 STM32L475 Pandora Board has 8 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `STM32L475 Pandora board User Manual`_.
+For more details please refer to `STM32L475 Pandora board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------

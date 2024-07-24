@@ -15,6 +15,7 @@
 #define ZEPHYR_INCLUDE_SYS_UTIL_H_
 
 #include <zephyr/sys/util_macro.h>
+#include <zephyr/toolchain.h>
 
 /* needs to be outside _ASMLANGUAGE so 'true' and 'false' can turn
  * into '1' and '0' for asm or linker scripts
@@ -25,6 +26,7 @@
 
 #include <zephyr/types.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /** @brief Number of bits that make up a type */
 #define NUM_BITS(t) (sizeof(t) * 8)
@@ -201,6 +203,45 @@ extern "C" {
 	})
 
 /**
+ * @brief Iterate over members of an array using an index variable
+ *
+ * @param array the array in question
+ * @param idx name of array index variable
+ */
+#define ARRAY_FOR_EACH(array, idx) for (size_t idx = 0; (idx) < ARRAY_SIZE(array); ++(idx))
+
+/**
+ * @brief Iterate over members of an array using a pointer
+ *
+ * @param array the array in question
+ * @param ptr pointer to an element of @p array
+ */
+#define ARRAY_FOR_EACH_PTR(array, ptr)                                                             \
+	for (__typeof__(*(array)) *ptr = (array); (size_t)((ptr) - (array)) < ARRAY_SIZE(array);   \
+	     ++(ptr))
+
+/**
+ * @brief Validate if two entities have a compatible type
+ *
+ * @param a the first entity to be compared
+ * @param b the second entity to be compared
+ * @return 1 if the two elements are compatible, 0 if they are not
+ */
+#define SAME_TYPE(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
+
+/**
+ * @brief Validate CONTAINER_OF parameters, only applies to C mode.
+ */
+#ifndef __cplusplus
+#define CONTAINER_OF_VALIDATE(ptr, type, field)               \
+	BUILD_ASSERT(SAME_TYPE(*(ptr), ((type *)0)->field) || \
+		     SAME_TYPE(*(ptr), void),                 \
+		     "pointer type mismatch in CONTAINER_OF");
+#else
+#define CONTAINER_OF_VALIDATE(ptr, type, field)
+#endif
+
+/**
  * @brief Get a pointer to a structure containing the element
  *
  * Example:
@@ -221,23 +262,38 @@ extern "C" {
  * @param field the name of the field within the struct @p ptr points to
  * @return a pointer to the structure that contains @p ptr
  */
-#define CONTAINER_OF(ptr, type, field) \
-	((type *)(((char *)(ptr)) - offsetof(type, field)))
+#define CONTAINER_OF(ptr, type, field)                               \
+	({                                                           \
+		CONTAINER_OF_VALIDATE(ptr, type, field)              \
+		((type *)(((char *)(ptr)) - offsetof(type, field))); \
+	})
 
 /**
- * @brief Value of @p x rounded up to the next multiple of @p align,
- *        which must be a power of 2.
+ * @brief Concatenate input arguments
+ *
+ * Concatenate provided tokens into a combined token during the preprocessor pass.
+ * This can be used to, for ex., build an identifier out of multiple parts,
+ * where one of those parts may be, for ex, a number, another macro, or a macro argument.
+ *
+ * @param ... Tokens to concatencate
+ *
+ * @return Concatenated token.
+ */
+#define CONCAT(...) \
+	UTIL_CAT(_CONCAT_, NUM_VA_ARGS_LESS_1(__VA_ARGS__))(__VA_ARGS__)
+
+/**
+ * @brief Value of @p x rounded up to the next multiple of @p align.
  */
 #define ROUND_UP(x, align)                                   \
-	(((unsigned long)(x) + ((unsigned long)(align) - 1)) & \
-	 ~((unsigned long)(align) - 1))
+	((((unsigned long)(x) + ((unsigned long)(align) - 1)) / \
+	  (unsigned long)(align)) * (unsigned long)(align))
 
 /**
- * @brief Value of @p x rounded down to the previous multiple of @p
- *        align, which must be a power of 2.
+ * @brief Value of @p x rounded down to the previous multiple of @p align.
  */
 #define ROUND_DOWN(x, align)                                 \
-	((unsigned long)(x) & ~((unsigned long)(align) - 1))
+	(((unsigned long)(x) / (unsigned long)(align)) * (unsigned long)(align))
 
 /** @brief Value of @p x rounded up to the next word boundary. */
 #define WB_UP(x) ROUND_UP(x, sizeof(void *))
@@ -260,6 +316,25 @@ extern "C" {
  * @return The result of @p n / @p d, rounded up.
  */
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+
+/**
+ * @brief Divide and round to the nearest integer.
+ *
+ * Example:
+ * @code{.c}
+ * DIV_ROUND_CLOSEST(5, 2); // 3
+ * DIV_ROUND_CLOSEST(5, -2); // -3
+ * DIV_ROUND_CLOSEST(5, 3); // 2
+ * @endcode
+ *
+ * @param n Numerator.
+ * @param d Denominator.
+ *
+ * @return The result of @p n / @p d, rounded to the nearest integer.
+ */
+#define DIV_ROUND_CLOSEST(n, d)	\
+	((((n) < 0) ^ ((d) < 0)) ? ((n) - ((d) / 2)) / (d) : \
+	((n) + ((d) / 2)) / (d))
 
 /**
  * @brief Ceiling function applied to @p numerator / @p divider as a fraction.
@@ -571,6 +646,61 @@ char *utf8_lcpy(char *dst, const char *src, size_t n);
  */
 #define NHPOT(x) ((x) < 1 ? 1 : ((x) > (1ULL<<63) ? 0 : 1ULL << LOG2CEIL(x)))
 
+/**
+ * @brief Determine if a buffer exceeds highest address
+ *
+ * This macro determines if a buffer identified by a starting address @a addr
+ * and length @a buflen spans a region of memory that goes beond the highest
+ * possible address (thereby resulting in a pointer overflow).
+ *
+ * @param addr Buffer starting address
+ * @param buflen Length of the buffer
+ *
+ * @return true if pointer overflow detected, false otherwise
+ */
+#define Z_DETECT_POINTER_OVERFLOW(addr, buflen)  \
+	(((buflen) != 0) &&                        \
+	((UINTPTR_MAX - (uintptr_t)(addr)) <= ((uintptr_t)((buflen) - 1))))
+
+/**
+ * @brief XOR n bytes
+ *
+ * @param dst  Destination of where to store result. Shall be @p len bytes.
+ * @param src1 First source. Shall be @p len bytes.
+ * @param src2 Second source. Shall be @p len bytes.
+ * @param len  Number of bytes to XOR.
+ */
+static inline void mem_xor_n(uint8_t *dst, const uint8_t *src1, const uint8_t *src2, size_t len)
+{
+	while (len--) {
+		*dst++ = *src1++ ^ *src2++;
+	}
+}
+
+/**
+ * @brief XOR 32 bits
+ *
+ * @param dst  Destination of where to store result. Shall be 32 bits.
+ * @param src1 First source. Shall be 32 bits.
+ * @param src2 Second source. Shall be 32 bits.
+ */
+static inline void mem_xor_32(uint8_t dst[4], const uint8_t src1[4], const uint8_t src2[4])
+{
+	mem_xor_n(dst, src1, src2, 4U);
+}
+
+/**
+ * @brief XOR 128 bits
+ *
+ * @param dst  Destination of where to store result. Shall be 128 bits.
+ * @param src1 First source. Shall be 128 bits.
+ * @param src2 Second source. Shall be 128 bits.
+ */
+static inline void mem_xor_128(uint8_t dst[16], const uint8_t src1[16], const uint8_t src2[16])
+{
+	mem_xor_n(dst, src1, src2, 16);
+}
+
 #ifdef __cplusplus
 }
 #endif
@@ -634,9 +764,9 @@ char *utf8_lcpy(char *dst, const char *src, size_t n);
  */
 #define WAIT_FOR(expr, timeout, delay_stmt)                                                        \
 	({                                                                                         \
-		uint32_t cycle_count = k_us_to_cyc_ceil32(timeout);                                \
-		uint32_t start = k_cycle_get_32();                                                 \
-		while (!(expr) && (cycle_count > (k_cycle_get_32() - start))) {                    \
+		uint32_t _wf_cycle_count = k_us_to_cyc_ceil32(timeout);                            \
+		uint32_t _wf_start = k_cycle_get_32();                                             \
+		while (!(expr) && (_wf_cycle_count > (k_cycle_get_32() - _wf_start))) {            \
 			delay_stmt;                                                                \
 			Z_SPIN_DELAY(10);                                                          \
 		}                                                                                  \

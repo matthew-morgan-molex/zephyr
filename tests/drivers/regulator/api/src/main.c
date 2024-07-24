@@ -60,6 +60,42 @@ ZTEST(regulator_api, test_parent_dvs_state_set_fail)
 	zassert_equal(regulator_parent_fake_dvs_state_set_fake.call_count, 1U);
 }
 
+ZTEST(regulator_api, test_parent_ship_mode_not_implemented)
+{
+	int ret;
+	struct regulator_parent_driver_api *api =
+		(struct regulator_parent_driver_api *)parent->api;
+	regulator_ship_mode_t ship_mode = api->ship_mode;
+
+	api->ship_mode = NULL;
+	ret = regulator_parent_ship_mode(parent);
+	api->ship_mode = ship_mode;
+
+	zassert_equal(ret, -ENOSYS);
+}
+
+ZTEST(regulator_api, test_parent_ship_mode_ok)
+{
+	RESET_FAKE(regulator_parent_fake_ship_mode);
+
+	regulator_parent_fake_ship_mode_fake.return_val = 0;
+
+	zassert_equal(regulator_parent_ship_mode(parent), 0);
+	zassert_equal(regulator_parent_fake_ship_mode_fake.arg0_val, parent);
+	zassert_equal(regulator_parent_fake_ship_mode_fake.call_count, 1U);
+}
+
+ZTEST(regulator_api, test_parent_ship_mode_fail)
+{
+	RESET_FAKE(regulator_parent_fake_ship_mode);
+
+	regulator_parent_fake_ship_mode_fake.return_val = -ENOTSUP;
+
+	zassert_equal(regulator_parent_ship_mode(parent), -ENOTSUP);
+	zassert_equal(regulator_parent_fake_ship_mode_fake.arg0_val, parent);
+	zassert_equal(regulator_parent_fake_ship_mode_fake.call_count, 1U);
+}
+
 ZTEST(regulator_api, test_common_config)
 {
 	const struct regulator_common_config *config;
@@ -72,15 +108,16 @@ ZTEST(regulator_api, test_common_config)
 	zassert_equal(config->max_ua, INT32_MAX);
 	zassert_equal(config->allowed_modes_cnt, 0U);
 	zassert_equal(config->initial_mode, REGULATOR_INITIAL_MODE_UNKNOWN);
-	zassert_equal(config->flags, 0U);
+	zassert_equal(REGULATOR_ACTIVE_DISCHARGE_GET_BITS(config->flags),
+	    REGULATOR_ACTIVE_DISCHARGE_DEFAULT);
 
 	/* reg1: regulator-always-on */
 	config = reg1->config;
-	zassert_equal(config->flags, REGULATOR_ALWAYS_ON);
+	zassert_equal(config->flags & REGULATOR_ALWAYS_ON, REGULATOR_ALWAYS_ON);
 
 	/* reg2: regulator-boot-on */
 	config = reg2->config;
-	zassert_equal(config->flags, REGULATOR_BOOT_ON);
+	zassert_equal(config->flags & REGULATOR_BOOT_ON, REGULATOR_BOOT_ON);
 
 	/* reg3: regulator-min/max-microvolt/microamp */
 	config = reg3->config;
@@ -91,6 +128,7 @@ ZTEST(regulator_api, test_common_config)
 	zassert_equal(config->allowed_modes[0], 1U);
 	zassert_equal(config->allowed_modes[1], 10U);
 	zassert_equal(config->allowed_modes_cnt, 2U);
+	zassert_equal(REGULATOR_ACTIVE_DISCHARGE_GET_BITS(config->flags), 1U);
 }
 
 ZTEST(regulator_api, test_common_is_init_enabled)
@@ -571,6 +609,58 @@ ZTEST(regulator_api, test_get_mode_not_implemented)
 	api->get_mode = NULL;
 	ret = regulator_get_mode(reg0, NULL);
 	api->get_mode = get_mode;
+
+	zassert_equal(ret, -ENOSYS);
+}
+
+ZTEST(regulator_api, test_set_active_discharge_not_implemented)
+{
+	int ret;
+	struct regulator_driver_api *api =
+		(struct regulator_driver_api *)reg0->api;
+	regulator_set_active_discharge_t set_active_discharge = api->set_active_discharge;
+
+	api->set_active_discharge = NULL;
+	ret = regulator_set_active_discharge(reg0, false);
+	api->set_active_discharge = set_active_discharge;
+
+	zassert_equal(ret, -ENOSYS);
+}
+
+static int get_active_discharge_ok(const struct device *dev, bool *active_discharge)
+{
+	ARG_UNUSED(dev);
+
+	*active_discharge = true;
+
+	return 0;
+}
+
+ZTEST(regulator_api, test_get_active_discharge_ok)
+{
+	bool active_discharge;
+
+	RESET_FAKE(regulator_fake_get_active_discharge);
+
+	regulator_fake_get_active_discharge_fake.custom_fake = get_active_discharge_ok;
+
+	zassert_equal(regulator_get_active_discharge(reg0, &active_discharge), false);
+	zassert_equal(active_discharge, true);
+	zassert_equal(regulator_fake_get_active_discharge_fake.call_count, 1U);
+	zassert_equal(regulator_fake_get_active_discharge_fake.arg0_val, reg0);
+	zassert_equal(regulator_fake_get_active_discharge_fake.arg1_val, &active_discharge);
+}
+
+ZTEST(regulator_api, test_get_active_discharge_not_implemented)
+{
+	int ret;
+	struct regulator_driver_api *api =
+		(struct regulator_driver_api *)reg0->api;
+	regulator_get_active_discharge_t get_active_discharge = api->get_active_discharge;
+
+	api->get_active_discharge = NULL;
+	ret = regulator_get_active_discharge(reg0, NULL);
+	api->get_active_discharge = get_active_discharge;
 
 	zassert_equal(ret, -ENOSYS);
 }

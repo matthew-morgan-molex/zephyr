@@ -61,6 +61,18 @@
 #endif
 
 /**
+ * @def CONFIG_OPENTHREAD_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES
+ *
+ * The maximum number of EID-to-RLOC cache entries that can be used for
+ * "snoop optimization" where an entry is created by inspecting a received message.
+ *
+ */
+#ifdef CONFIG_OPENTHREAD_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES
+#define OPENTHREAD_CONFIG_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES                  \
+	CONFIG_OPENTHREAD_TMF_ADDRESS_CACHE_MAX_SNOOP_ENTRIES
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_LOG_PREPEND_LEVEL
  *
  * Define to prepend the log level to all log messages.
@@ -385,16 +397,6 @@
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
- *
- * Set to 1 if you want to enable key reference usage support.
- *
- */
-#ifdef CONFIG_OPENTHREAD_PLATFORM_KEY_REFERENCES_ENABLE
-#define OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE 1
-#endif
-
-/**
  * @def OPENTHREAD_CONFIG_PLATFORM_MAC_KEYS_EXPORTABLE_ENABLE
  *
  * Set to 1 if you want to make MAC keys exportable.
@@ -437,13 +439,13 @@
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_PLATFORM_POWER_CALIBRATION_ENABLE
+ * @def OPENTHREAD_CONFIG_RADIO_STATS
  *
- * In Zephyr, power calibration is handled by Radio Driver, so it can't be handled on OT level.
+ * Enable support for Radio Statistics.
  *
  */
-#ifndef OPENTHREAD_CONFIG_PLATFORM_POWER_CALIBRATION_ENABLE
-#define OPENTHREAD_CONFIG_PLATFORM_POWER_CALIBRATION_ENABLE 0
+#ifdef CONFIG_OPENTHREAD_RADIO_STATS
+#define OPENTHREAD_CONFIG_RADIO_STATS_ENABLE CONFIG_OPENTHREAD_RADIO_STATS
 #endif
 
 #endif  /* OPENTHREAD_CORE_ZEPHYR_CONFIG_H_ */

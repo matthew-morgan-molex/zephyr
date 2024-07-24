@@ -12,6 +12,7 @@
 #include <zephyr/bluetooth/hci.h>
 
 #include <zephyr/settings/settings.h>
+#include <zephyr/bluetooth/mesh.h>
 
 #include "host/hci_core.h"
 #include "mesh.h"
@@ -29,6 +30,7 @@
 #include "settings.h"
 #include "cfg.h"
 #include "solicitation.h"
+#include "va.h"
 
 #define LOG_LEVEL CONFIG_BT_MESH_SETTINGS_LOG_LEVEL
 #include <zephyr/logging/log.h>
@@ -86,7 +88,7 @@ static int mesh_commit(void)
 	}
 
 	if (!atomic_test_bit(bt_dev.flags, BT_DEV_ENABLE)) {
-		/* The Bluetooth mesh settings loader calls bt_mesh_start() immediately
+		/* The Bluetooth Mesh settings loader calls bt_mesh_start() immediately
 		 * after loading the settings. This is not intended to work before
 		 * bt_enable(). The doc on @ref bt_enable requires the "bt/" settings
 		 * tree to be loaded after @ref bt_enable is completed, so this handler
@@ -184,8 +186,7 @@ static void store_pending(struct k_work *work)
 {
 	LOG_DBG("");
 
-	if (IS_ENABLED(CONFIG_BT_MESH_RPL_STORAGE_MODE_SETTINGS) &&
-	    atomic_test_and_clear_bit(pending_flags, BT_MESH_SETTINGS_RPL_PENDING)) {
+	if (atomic_test_and_clear_bit(pending_flags, BT_MESH_SETTINGS_RPL_PENDING)) {
 		bt_mesh_rpl_pending_store(BT_MESH_ADDR_ALL_NODES);
 	}
 

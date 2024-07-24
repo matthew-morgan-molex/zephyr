@@ -3,6 +3,7 @@
  */
 #include <stdlib.h>
 #include <zephyr/kernel.h>
+#include <zephyr/kernel/smp.h>
 #include <zephyr/ztest.h>
 #include <zephyr/cache.h>
 
@@ -83,19 +84,19 @@ static void core_smoke(void *arg)
 	zassert_equal(cpu, arch_curr_cpu()->id, "wrong cpu");
 
 	/* Un/cached regions should be configured and distinct */
-	zassert_equal(&tag, arch_xtensa_cached_ptr((void *)&tag),
+	zassert_equal(&tag, sys_cache_cached_ptr_get((void *)&tag),
 		      "stack memory not cached");
-	zassert_not_equal(&tag, arch_xtensa_uncached_ptr((void *)&tag),
+	zassert_not_equal(&tag, sys_cache_uncached_ptr_get((void *)&tag),
 			  "stack memory not cached");
-	zassert_not_equal(&static_tag, arch_xtensa_cached_ptr((void *)&static_tag),
+	zassert_not_equal(&static_tag, sys_cache_cached_ptr_get((void *)&static_tag),
 		      "stack memory not cached");
-	zassert_equal(&static_tag, arch_xtensa_uncached_ptr((void *)&static_tag),
+	zassert_equal(&static_tag, sys_cache_uncached_ptr_get((void *)&static_tag),
 			  "stack memory not cached");
 
 	/* Un/cached regions should be working */
 	printk(" Cache behavior check\n");
-	volatile int *ctag = (volatile int *)arch_xtensa_cached_ptr((void *)&tag);
-	volatile int *utag = (volatile int *)arch_xtensa_uncached_ptr((void *)&tag);
+	volatile int *ctag = (volatile int *)sys_cache_cached_ptr_get((void *)&tag);
+	volatile int *utag = (volatile int *)sys_cache_uncached_ptr_get((void *)&tag);
 
 	tag = 99;
 	zassert_true(*ctag == 99, "variable is cached");
@@ -162,7 +163,7 @@ static void halt_and_restart(int cpu)
 	int ret;
 
 	/* On older hardware we need to get the host to turn the core
-	 * off.  Construct an ADSPCS with only this core disabled
+	 * off. Construct an ADSPCS with only this core disabled
 	 */
 	if (!IS_ENABLED(CONFIG_SOC_INTEL_CAVS_V25)) {
 		intel_adsp_ipc_send_message(INTEL_ADSP_IPC_HOST_DEV, IPCCMD_ADSPCS,
@@ -188,7 +189,7 @@ static void halt_and_restart(int cpu)
 		k_msleep(50);
 	}
 
-	z_smp_start_cpu(cpu);
+	k_smp_cpu_start(cpu, NULL, NULL);
 
 	/* Startup can be slow */
 	k_msleep(50);

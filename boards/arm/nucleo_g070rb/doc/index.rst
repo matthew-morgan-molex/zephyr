@@ -138,7 +138,7 @@ Default Zephyr Peripheral Mapping:
 - ADC1 IN1  : PA1
 - DAC1_OUT1 : PA4
 
-For mode details please refer to `STM32 Nucleo-64 board User Manual`_.
+For more details please refer to `STM32 Nucleo-64 board User Manual`_.
 
 Programming and Debugging
 *************************
@@ -155,7 +155,7 @@ Nucleo G070RB board includes an ST-LINK/V2-1 embedded debug tool interface.
 Flashing an application to Nucleo G070RB
 ----------------------------------------
 
-Here is an example for the :ref:`blinky-sample` application.
+Here is an example for the :zephyr:code-sample:`blinky` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/basic/blinky
@@ -182,10 +182,10 @@ References
 .. target-notes::
 
 .. _Nucleo G070RB website:
-   http://www.st.com/en/evaluation-tools/nucleo-g070rb.html
+   https://www.st.com/en/evaluation-tools/nucleo-g070rb.html
 
 .. _STM32 Nucleo-64 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00452640.pdf
+   https://www.st.com/resource/en/user_manual/dm00452640.pdf
 
 .. _G070RB on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32g070rb.html
+   https://www.st.com/en/microcontrollers/stm32g070rb.html

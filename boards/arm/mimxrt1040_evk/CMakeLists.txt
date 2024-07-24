@@ -21,7 +21,7 @@ if(CONFIG_NXP_IMX_RT_BOOT_HEADER)
     zephyr_compile_definitions(XIP_BOOT_HEADER_ENABLE=1)
     zephyr_compile_definitions(BOARD_FLASH_SIZE=CONFIG_FLASH_SIZE*1024)
     zephyr_library_sources(${RT1040_BOARD_DIR}/xip/evkmimxrt1040_flexspi_nor_config.c)
-    zephyr_library_include_directories(${RT1024_BOARD_DIR}/xip)
+    zephyr_library_include_directories(${RT1040_BOARD_DIR}/xip)
   endif()
   if(CONFIG_DEVICE_CONFIGURATION_DATA)
     # Include device configuration data block for RT1040 EVK from NXP's HAL.
@@ -29,6 +29,11 @@ if(CONFIG_NXP_IMX_RT_BOOT_HEADER)
     # is used on your custom board.
     zephyr_compile_definitions(XIP_BOOT_HEADER_DCD_ENABLE=1)
     zephyr_library_sources(${RT1040_BOARD_DIR}/dcd.c)
+  else()
+    if(CONFIG_SRAM_BASE_ADDRESS EQUAL 0x80000000)
+      message(WARNING "You are using SDRAM as RAM but no device "
+        "configuration data (DCD) is included. This configuration may not boot")
+    endif()
   endif()
 endif()
 

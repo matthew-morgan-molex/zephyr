@@ -113,7 +113,7 @@ Pin Mapping
 STM32F412G-DISCO Discovery kit has 8 GPIO controllers. These controllers are responsible for pin muxing,
 input/output, pull-up, etc.
 
-For mode details please refer to `32F412GDISCOVERY board User Manual`_.
+For more details please refer to `32F412GDISCOVERY board User Manual`_.
 
 Default Zephyr Peripheral Mapping:
 ----------------------------------
@@ -190,13 +190,13 @@ You can debug an application in the usual way.  Here is an example for the
    :goals: debug
 
 .. _32F412GDISCOVERY website:
-   http://www.st.com/en/evaluation-tools/32f412gdiscovery.html
+   https://www.st.com/en/evaluation-tools/32f412gdiscovery.html
 
 .. _32F412GDISCOVERY board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00275919.pdf
+   https://www.st.com/resource/en/user_manual/dm00275919.pdf
 
 .. _STM32F412ZG on www.st.com:
-   http://www.st.com/en/microcontrollers/stm32f412zg.html
+   https://www.st.com/en/microcontrollers/stm32f412zg.html
 
 .. _STM32F412 reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00180369.pdf
+   https://www.st.com/resource/en/reference_manual/dm00180369.pdf

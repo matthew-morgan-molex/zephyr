@@ -8,6 +8,7 @@
 #include <st/f7/stm32f723Xe.dtsi>
 #include <st/f7/stm32f723i(c-e)kx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "STMicroelectronics STM32F723E DISCOVERY board";
@@ -42,6 +43,7 @@
 		user_button: button {
 			label = "User";
 			gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+			zephyr,code = <INPUT_KEY_0>;
 		};
 	};
 
@@ -122,11 +124,10 @@
 	flash-id = <1>;
 	status = "okay";
 
-	mx25r512: qspi-nor-flash@0 {
+	mx25r512: qspi-nor-flash@90000000 {
 		compatible = "st,stm32-qspi-nor";
-		reg = <0>;
+		reg = <0x90000000 DT_SIZE_M(64)>; /* 512 Mbits */
 		qspi-max-frequency = <8000000>;
-		size = <DT_SIZE_M(512)>; /* 64 MBytes */
 		status = "okay";
 		spi-bus-width = <4>;
 		writeoc = "PP_1_4_4";

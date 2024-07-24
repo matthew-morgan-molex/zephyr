@@ -8,7 +8,7 @@
 #define DT_DRAM_BASE		0
 #endif
 #ifndef DT_DRAM_SIZE
-#define DT_DRAM_SIZE		DT_SIZE_K(4096)
+#define DT_DRAM_SIZE		DT_SIZE_M(32)
 #endif
 #define DT_FLASH_SIZE		DT_SIZE_K(4096)
 
@@ -49,7 +49,8 @@
 	pcie0: pcie0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "intel,pcie";
+		compatible = "pcie-controller";
+		acpi-hid = "PNP0A08";
 		ranges;
 
 		can0: can0 {
@@ -59,7 +60,6 @@
 			device-id = <0x8406>;
 			interrupts = <11 IRQ_TYPE_LOWEST_LEVEL_LOW 3>;
 			interrupt-parent = <&intc>;
-			sjw = <1>;
 			bus-speed = <125000>;
 			sample-point = <875>;
 

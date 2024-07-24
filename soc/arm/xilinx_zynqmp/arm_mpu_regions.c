@@ -4,7 +4,7 @@
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/arch/arm/aarch32/mpu/arm_mpu.h>
+#include <zephyr/arch/arm/mpu/arm_mpu.h>
 
 #define MPUTYPE_READ_ONLY \
 	{ \
@@ -22,11 +22,12 @@
 				| MPU_RASR_B_Msk) \
 	}
 
-#define MPUTYPE_PRIV_WBWACACHE \
+#define MPUTYPE_PRIV_WBWACACHE_XN \
 	{ \
 		.rasr = (P_RW_U_NA_Msk \
 				| (5 << MPU_RASR_TEX_Pos) \
-				| MPU_RASR_B_Msk) \
+				| MPU_RASR_B_Msk \
+				| MPU_RASR_XN_Msk) \
 	}
 
 #define MPUTYPE_PRIV_DEVICE \
@@ -44,8 +45,8 @@ static const struct arm_mpu_region mpu_regions[] = {
 
 	MPU_REGION_ENTRY("SRAM_PRIV",
 			0x00000000,
-			REGION_64M,
-			MPUTYPE_PRIV_WBWACACHE),
+			REGION_2G,
+			MPUTYPE_PRIV_WBWACACHE_XN),
 
 	MPU_REGION_ENTRY("SRAM",
 			0x00000000,

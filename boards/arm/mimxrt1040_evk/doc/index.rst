@@ -69,6 +69,23 @@ these references:
 - `MIMXRT1040-EVK User Guide`_
 - `MIMXRT1040-EVK Design Files`_
 
+External Memory
+===============
+
+This platform has the following external memories:
+
++----------------+------------+-------------------------------------+
+| Device         | Controller | Status                              |
++================+============+=====================================+
+| W9825G6KH      | SEMC       | Enabled via device configuration    |
+|                |            | data block, which sets up SEMC at   |
+|                |            | boot time                           |
++----------------+------------+-------------------------------------+
+| W25Q64JVSSIQ   | FLEXSPI    | Enabled via flash configurationn    |
+|                |            | block, which sets up FLEXSPI at     |
+|                |            | boot time. Supported for XIP only.  |
++----------------+------------+-------------------------------------+
+
 Supported Features
 ==================
 
@@ -274,8 +291,18 @@ should see the following message in the terminal:
 Troubleshooting
 ===============
 
+USER_LED D8
+-----------
+The MIMXRT1040-EVK board ships with the wireless module in the M.2 connector,
+and with jumper J80 shorted.  This causes a conflict with the USER_LED D8,
+and the LED will not turn off.  Samples and applications using USER_LED D8,
+like blinky, require removal of J80 jumper.
+
+Boot Header
+-----------
+
 If the debug probe fails to connect with the following error, it's possible
-that the boot header in HyperFlash is invalid or corrupted. The boot header is
+that the boot header in QSPI is invalid or corrupted. The boot header is
 configured by :kconfig:option:`CONFIG_NXP_IMX_RT_BOOT_HEADER`.
 
 .. code-block:: console
@@ -302,11 +329,32 @@ steps:
 
 #. Reset by pressing SW1
 
+
+WiFi Module
+-----------
+
+If the debugger fails to connect with the following error, it's possible
+the M.2 WiFi module is interfering with the debug signals
+
+.. code-block:: console
+
+   Remote debugging using :2331
+   Remote communication error.  Target disconnected.: Connection reset by peer.
+   "monitor" command not supported by this target.
+   "monitor" command not supported by this target.
+   You can't do that when your target is `exec'
+   (gdb) Could not connect to target.
+   Please check power, connection and settings.
+
+To resolve this, you may remove the M.2 WiFi module from the board when
+flashing or debugging it, or remove jumper J80.
+
+
 .. _MIMXRT1040-EVK Website:
    https://www.nxp.com/design/development-boards/i-mx-evaluation-and-development-boards/i-mx-rt1040-evaluation-kit:MIMXRT1040-EVK
 
 .. _MIMXRT1040-EVK User Guide:
-   https://www.nxp.com/docs/en/user-manual/MIMXRT1040-EVKUM.pdf
+   https://www.nxp.com/webapp/Download?colCode=MIMXRT1040-EVKUM
 
 .. _MIMXRT1040-EVK Design Files:
    https://www.nxp.com/webapp/Download?colCode=MIMXRT1040-EVK-DESIGNFILES
@@ -315,7 +363,7 @@ steps:
    https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/i-mx-rt-crossover-mcus/i-mx-rt1040-crossover-mcu-with-arm-cortex-m7-core:i.MX-RT1040
 
 .. _i.MX RT1040 Datasheet:
-   https://www.nxp.com/docs/en/data-sheet/IMXRT1040CECDS.pdf
+   https://www.nxp.com/docs/en/data-sheet/IMXRT1040CEC.pdf
 
 .. _i.MX RT1040 Reference Manual:
    https://www.nxp.com/webapp/Download?colCode=IMXRT1040RM
