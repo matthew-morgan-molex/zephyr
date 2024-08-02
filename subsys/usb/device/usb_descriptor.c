@@ -353,6 +353,7 @@ static void usb_fix_ascii_sn_string_descriptor(struct usb_sn_descriptor *sn)
 	}
 
 	memcpy(sn->bString, runtime_sn, runtime_sn_len);
+        sn->bLength = (runtime_sn_len + 1) * 2;
 }
 
 static void usb_desc_update_mps0(struct usb_device_descriptor *const desc)
