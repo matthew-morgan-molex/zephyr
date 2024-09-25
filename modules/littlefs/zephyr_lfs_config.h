@@ -69,6 +69,7 @@ extern "C"
 #define LFS_ASSERT(test) __ASSERT_NO_MSG(test)
 #endif
 
+#define LFS_MULTIVERSION
 
 /* Builtin functions, these may be replaced by more efficient */
 /* toolchain-specific implementations. LFS_NO_INTRINSICS falls back to a more */
