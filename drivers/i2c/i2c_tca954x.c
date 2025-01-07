@@ -151,9 +151,25 @@ static int tca954x_channel_init(const struct device *dev)
 	return 0;
 }
 
+static int tca954x_recover_bus(const struct device *dev)
+{
+    const struct tca954x_root_config *cfg = get_root_config_from_channel(dev);
+
+    if (cfg == NULL)
+        return -ENOSYS;
+
+    if (cfg->i2c.bus == NULL)
+        return -ENOSYS;
+
+    /* Call recover against the parent bus. */
+    return i2c_recover_bus(cfg->i2c.bus);
+}
+
+
 static const struct i2c_driver_api tca954x_api_funcs = {
 	.configure = tca954x_configure,
 	.transfer = tca954x_transfer,
+   .recover_bus = tca954x_recover_bus,
 };
 
 BUILD_ASSERT(CONFIG_I2C_TCA954X_CHANNEL_INIT_PRIO > CONFIG_I2C_TCA954X_ROOT_INIT_PRIO,
