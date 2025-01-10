@@ -147,7 +147,7 @@ static int mcux_ccm_get_subsys_rate(const struct device *dev,
 
 	switch (clock_name) {
 
-#ifdef CONFIG_I2C_MCUX_LPI2C
+#if defined(CONFIG_I2C_MCUX_LPI2C) || defined(CONFIG_BW_I2C_MCUX_LPI2C)
 	case IMX_CCM_LPI2C_CLK:
 		if (CLOCK_GetMux(kCLOCK_Lpi2cMux) == 0) {
 			*rate = CLOCK_GetPllFreq(kCLOCK_PllUsb1) / 8
